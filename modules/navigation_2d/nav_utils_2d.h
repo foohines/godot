@@ -111,7 +111,6 @@ struct Polygon {
 struct NavigationPoly {
 	/// This poly.
 	const Polygon *poly = nullptr;
-	const NavMap2D *map = nullptr;
 
 	/// Index in the heap of traversable polygons.
 	uint32_t traversable_poly_index = UINT32_MAX;
