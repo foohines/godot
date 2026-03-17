@@ -37,10 +37,24 @@
 #include "core/math/math_defs.h"
 #include "core/os/semaphore.h"
 
+class NavMap2D;
+class NavLink2D;
 class NavLinkIteration2D;
 class NavRegion2D;
 class NavRegionIteration2D;
 struct NavMapIteration2D;
+
+struct CrossMapLinkConnectionData {
+	const NavLink2D* link = nullptr;
+	const NavLinkIteration2D* link_iteration = nullptr;
+	NavMap2D* other_map = nullptr;
+	NavMapIteration2D* map_iteration = nullptr;
+	Vector2 position;
+	bool ingress = false;
+	bool egress = false;
+	int32_t navlink_polygon_index = -1;
+	Nav2D::Polygon* map_polygon = nullptr;
+};
 
 struct NavMapIterationBuild2D {
 	Vector2 merge_rasterizer_cell_size;
@@ -71,17 +85,23 @@ struct NavMapIterationBuild2D {
 };
 
 struct NavMapIteration2D {
+	NavMap2D* map = nullptr;
 	mutable SafeNumeric<uint32_t> users;
 	RWLock rwlock;
 
 	LocalVector<Ref<NavRegionIteration2D>> region_iterations;
 	LocalVector<Ref<NavLinkIteration2D>> link_iterations;
+	LocalVector<NavMap2D*> linked_maps;
 
 	int navmesh_polygon_count = 0;
 
 	// The edge connections that the map builds on top with the edge connection margin.
 	HashMap<const NavBaseIteration2D *, LocalVector<Nav2D::Connection>> external_region_connections;
+
+	// Connections for perfectly aligned regions, imperfectly aligned regions, and links
 	HashMap<const NavBaseIteration2D *, LocalVector<LocalVector<Nav2D::Connection>>> navbases_polygons_external_connections;
+
+	AHashMap<const NavLink2D *, CrossMapLinkConnectionData> cross_map_link_connection_map;
 
 	LocalVector<Nav2D::Polygon> navlink_polygons;
 
@@ -96,24 +116,39 @@ struct NavMapIteration2D {
 
 		region_iterations.clear();
 		link_iterations.clear();
+		linked_maps.clear();
 		external_region_connections.clear();
 		navbases_polygons_external_connections.clear();
+		cross_map_link_connection_map.clear();
 		navlink_polygons.clear();
 		region_ptr_to_region_iteration.clear();
 	}
 };
 
 class NavMapIterationRead2D {
-	const NavMapIteration2D &map_iteration;
-
+	NavMapIteration2D *map_iteration = nullptr;
 public:
-	_ALWAYS_INLINE_ NavMapIterationRead2D(const NavMapIteration2D &p_iteration) :
-			map_iteration(p_iteration) {
-		map_iteration.rwlock.read_lock();
-		map_iteration.users.increment();
+	NavMapIteration2D *iteration() const { return map_iteration; }
+
+	_ALWAYS_INLINE_ NavMapIterationRead2D() {}
+	_ALWAYS_INLINE_ NavMapIterationRead2D(NavMapIteration2D &p_iteration) :
+			map_iteration(&p_iteration) {
+		map_iteration->rwlock.read_lock();
+		map_iteration->users.increment();
 	}
+
+	NavMapIterationRead2D(const NavMapIterationRead2D &) = delete;
+	NavMapIterationRead2D &operator=(const NavMapIterationRead2D &) = delete;
+
+	_ALWAYS_INLINE_ NavMapIterationRead2D(NavMapIterationRead2D &&p_other) :
+            map_iteration(p_other.map_iteration) {
+        p_other.map_iteration = nullptr;
+    }
+
 	_ALWAYS_INLINE_ ~NavMapIterationRead2D() {
-		map_iteration.users.decrement();
-		map_iteration.rwlock.read_unlock();
+		if (map_iteration) {
+			map_iteration->users.decrement();
+			map_iteration->rwlock.read_unlock();
+		}
 	}
 };

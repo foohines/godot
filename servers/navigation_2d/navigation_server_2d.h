@@ -82,7 +82,7 @@ public:
 	virtual void map_set_link_connection_radius(RID p_map, real_t p_connection_radius) = 0;
 	virtual real_t map_get_link_connection_radius(RID p_map) const = 0;
 
-	virtual Vector<Vector2> map_get_path(RID p_map, Vector2 p_origin, Vector2 p_destination, bool p_optimize, uint32_t p_navigation_layers = 1) = 0;
+	virtual Vector<Vector2> map_get_path(RID p_map, Vector2 p_origin, Vector2 p_destination, bool p_optimize, RID p_destination_map = RID(), uint32_t p_navigation_layers = 1) = 0;
 
 	virtual Vector2 map_get_closest_point(RID p_map, const Vector2 &p_point) const = 0;
 	virtual RID map_get_closest_point_owner(RID p_map, const Vector2 &p_point) const = 0;
@@ -152,11 +152,16 @@ public:
 	virtual void link_set_map(RID p_link, RID p_map) = 0;
 	virtual RID link_get_map(RID p_link) const = 0;
 
+	virtual void link_set_other_map(RID p_link, RID p_map) = 0;
+	virtual RID link_get_other_map(RID p_link) const = 0;
+
 	virtual void link_set_enabled(RID p_link, bool p_enabled) = 0;
 	virtual bool link_get_enabled(RID p_link) const = 0;
 
 	virtual void link_set_bidirectional(RID p_link, bool p_bidirectional) = 0;
 	virtual bool link_is_bidirectional(RID p_link) const = 0;
+
+	virtual bool link_is_cross_map(RID p_link) const = 0;
 
 	virtual void link_set_navigation_layers(RID p_link, uint32_t p_navigation_layers) = 0;
 	virtual uint32_t link_get_navigation_layers(RID p_link) const = 0;

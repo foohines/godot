@@ -34,17 +34,23 @@
 #include "nav_base_2d.h"
 #include "nav_utils_2d.h"
 
+class NavLink2D;
+
 class NavLinkIteration2D : public NavBaseIteration2D {
 	GDCLASS(NavLinkIteration2D, NavBaseIteration2D);
 
 public:
+	const NavLink2D* link = nullptr;
+	NavMap2D *other_map = nullptr;
 	bool bidirectional = true;
+	bool cross_map = false;
 	Vector2 start_position;
 	Vector2 end_position;
 
 	Vector2 get_start_position() const { return start_position; }
 	Vector2 get_end_position() const { return end_position; }
 	bool is_bidirectional() const { return bidirectional; }
+	bool is_cross_map() const { return cross_map; }
 
 	virtual ~NavLinkIteration2D() override {
 		navmesh_polygons.clear();
@@ -56,6 +62,7 @@ public:
 
 class NavLink2D : public NavBase2D {
 	NavMap2D *map = nullptr;
+	NavMap2D *other_map = nullptr;
 	bool bidirectional = true;
 	Vector2 start_position;
 	Vector2 end_position;
@@ -86,12 +93,21 @@ public:
 		return map;
 	}
 
+	void set_other_map(NavMap2D *p_map);
+	NavMap2D *get_other_map() const {
+		return other_map;
+	}
+
 	void set_enabled(bool p_enabled);
 	bool get_enabled() const { return enabled; }
 
 	void set_bidirectional(bool p_bidirectional);
 	bool is_bidirectional() const {
 		return bidirectional;
+	}
+
+	bool is_cross_map() const {
+		return other_map != nullptr;
 	}
 
 	void set_start_position(Vector2 p_position);

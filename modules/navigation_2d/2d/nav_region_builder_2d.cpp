@@ -57,6 +57,7 @@ void NavRegionBuilder2D::build_iteration(NavRegionIterationBuild2D &r_build) {
 	_build_update_iteration(r_build);
 }
 
+// build out region_iteration->navmesh_polygons and region bounds
 void NavRegionBuilder2D::_build_step_process_navmesh_data(NavRegionIterationBuild2D &r_build) {
 	Vector<Vector2> _navmesh_vertices = r_build.navmesh_data.vertices;
 	Vector<Vector<int>> _navmesh_polygons = r_build.navmesh_data.polygons;
@@ -102,6 +103,7 @@ void NavRegionBuilder2D::_build_step_process_navmesh_data(NavRegionIterationBuil
 
 		polygon.vertices.resize(polygon_size);
 
+		// calculate surface area. why in a block?
 		{
 			real_t _new_polygon_surface_area = 0.0;
 
@@ -118,6 +120,7 @@ void NavRegionBuilder2D::_build_step_process_navmesh_data(NavRegionIterationBuil
 			_new_region_surface_area += _new_polygon_surface_area;
 		}
 
+		// build polygon vertices and region bounding rectangle
 		for (int j(0); j < polygon_size; j++) {
 			int vertex_index = indices_ptr[j];
 			if (vertex_index < 0 || vertex_index >= vertex_count) {
@@ -165,6 +168,7 @@ Nav2D::EdgeKey NavRegionBuilder2D::get_edge_key(const Vector2 &p_vertex1, const 
 	return ek;
 }
 
+// builds out iter_connection_pairs_map (EdgeConnectionPairs, Connections), inits region_iteration internal_connections and external_edges 
 void NavRegionBuilder2D::_build_step_find_edge_connection_pairs(NavRegionIterationBuild2D &r_build) {
 	PerformanceData &performance_data = r_build.performance_data;
 
@@ -223,6 +227,7 @@ void NavRegionBuilder2D::_build_step_find_edge_connection_pairs(NavRegionIterati
 	performance_data.pm_edge_free_count = free_edges_count;
 }
 
+// Populates internal_connections and external_edges (ConnectableEdge)
 void NavRegionBuilder2D::_build_step_merge_edge_connection_pairs(NavRegionIterationBuild2D &r_build) {
 	PerformanceData &performance_data = r_build.performance_data;
 

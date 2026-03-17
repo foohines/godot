@@ -62,6 +62,7 @@ private:
 	PathfindingAlgorithm pathfinding_algorithm = PATHFINDING_ALGORITHM_ASTAR;
 	PathPostProcessing path_postprocessing = PATH_POSTPROCESSING_CORRIDORFUNNEL;
 	RID map;
+	RID destination_map;
 	Vector2 start_position;
 	Vector2 target_position;
 	uint32_t navigation_layers = 1;
@@ -86,6 +87,9 @@ public:
 
 	void set_map(RID p_map);
 	RID get_map() const;
+
+	void set_destination_map(RID p_destination_map);
+	RID get_destination_map() const;
 
 	void set_start_position(const Vector2 p_start_position);
 	Vector2 get_start_position() const;

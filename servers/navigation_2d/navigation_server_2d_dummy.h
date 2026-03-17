@@ -51,7 +51,7 @@ public:
 	real_t map_get_edge_connection_margin(RID p_map) const override { return 0; }
 	void map_set_link_connection_radius(RID p_map, real_t p_connection_radius) override {}
 	real_t map_get_link_connection_radius(RID p_map) const override { return 0; }
-	Vector<Vector2> map_get_path(RID p_map, Vector2 p_origin, Vector2 p_destination, bool p_optimize, uint32_t p_navigation_layers = 1) override { return Vector<Vector2>(); }
+	Vector<Vector2> map_get_path(RID p_map, Vector2 p_origin, Vector2 p_destination, bool p_optimize, RID p_destination_map = RID(), uint32_t p_navigation_layers = 1) override { return Vector<Vector2>(); }
 	Vector2 map_get_closest_point(RID p_map, const Vector2 &p_point) const override { return Vector2(); }
 	RID map_get_closest_point_owner(RID p_map, const Vector2 &p_point) const override { return RID(); }
 	TypedArray<RID> map_get_links(RID p_map) const override { return TypedArray<RID>(); }
@@ -97,10 +97,13 @@ public:
 	uint32_t link_get_iteration_id(RID p_link) const override { return 0; }
 	void link_set_map(RID p_link, RID p_map) override {}
 	RID link_get_map(RID p_link) const override { return RID(); }
+	void link_set_other_map(RID p_link, RID p_other_map) override {}
+	RID link_get_other_map(RID p_link) const override { return RID(); }
 	void link_set_enabled(RID p_link, bool p_enabled) override {}
 	bool link_get_enabled(RID p_link) const override { return false; }
 	void link_set_bidirectional(RID p_link, bool p_bidirectional) override {}
 	bool link_is_bidirectional(RID p_link) const override { return false; }
+	bool link_is_cross_map(RID p_link) const override {return false; }
 	void link_set_navigation_layers(RID p_link, uint32_t p_navigation_layers) override {}
 	uint32_t link_get_navigation_layers(RID p_link) const override { return 0; }
 	void link_set_start_position(RID p_link, Vector2 p_position) override {}

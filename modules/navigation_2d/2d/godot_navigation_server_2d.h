@@ -127,7 +127,7 @@ public:
 	COMMAND_2(map_set_link_connection_radius, RID, p_map, real_t, p_connection_radius);
 	virtual real_t map_get_link_connection_radius(RID p_map) const override;
 
-	virtual Vector<Vector2> map_get_path(RID p_map, Vector2 p_origin, Vector2 p_destination, bool p_optimize, uint32_t p_navigation_layers = 1) override;
+	virtual Vector<Vector2> map_get_path(RID p_map, Vector2 p_origin, Vector2 p_destination, bool p_optimize, RID p_destination_map = RID(), uint32_t p_navigation_layers = 1) override;
 
 	virtual Vector2 map_get_closest_point(RID p_map, const Vector2 &p_point) const override;
 
@@ -188,12 +188,20 @@ public:
 	/// Set the map of this link.
 	COMMAND_2(link_set_map, RID, p_link, RID, p_map);
 	virtual RID link_get_map(RID p_link) const override;
+
+	/// Set the map of this link.
+	COMMAND_2(link_set_other_map, RID, p_link, RID, p_map);
+	virtual RID link_get_other_map(RID p_link) const override;
+
 	COMMAND_2(link_set_enabled, RID, p_link, bool, p_enabled);
 	virtual bool link_get_enabled(RID p_link) const override;
 
 	/// Set whether this link travels in both directions.
 	COMMAND_2(link_set_bidirectional, RID, p_link, bool, p_bidirectional);
 	virtual bool link_is_bidirectional(RID p_link) const override;
+
+	/// Get whether this link goes from one map to another.
+	virtual bool link_is_cross_map(RID p_link) const override;
 
 	/// Set the link's layers.
 	COMMAND_2(link_set_navigation_layers, RID, p_link, uint32_t, p_navigation_layers);

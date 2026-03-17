@@ -91,6 +91,13 @@ public:
 		SOURCE_GEOMETRY_MAX
 	};
 
+	enum NavigationGeometryType {
+		NAVIGATION_GEOMETRY_OBSTRUCTION = 0,
+		NAVIGATION_GEOMETRY_TRAVERSABLE,
+		NAVIGATION_GEOMETRY_MAX
+	};
+
+
 	real_t agent_radius = 10.0f;
 
 	SamplePartitionType partition_type = SAMPLE_PARTITION_CONVEX_PARTITION;
@@ -98,6 +105,8 @@ public:
 	uint32_t parsed_collision_mask = 0xFFFFFFFF;
 
 	SourceGeometryMode source_geometry_mode = SOURCE_GEOMETRY_ROOT_NODE_CHILDREN;
+	NavigationGeometryType navigation_geometry_type = NAVIGATION_GEOMETRY_OBSTRUCTION;
+
 	StringName source_geometry_group_name = "navigation_polygon_source_geometry_group";
 
 	void set_vertices(const Vector<Vector2> &p_vertices);
@@ -130,6 +139,9 @@ public:
 
 	void set_parsed_geometry_type(ParsedGeometryType p_geometry_type);
 	ParsedGeometryType get_parsed_geometry_type() const;
+
+	void set_navigation_geometry_type(NavigationGeometryType p_navigation_geometry_type);
+	NavigationGeometryType get_navigation_geometry_type() const;
 
 	void set_parsed_collision_mask(uint32_t p_mask);
 	uint32_t get_parsed_collision_mask() const;
@@ -171,3 +183,4 @@ public:
 VARIANT_ENUM_CAST(NavigationPolygon::SamplePartitionType);
 VARIANT_ENUM_CAST(NavigationPolygon::ParsedGeometryType);
 VARIANT_ENUM_CAST(NavigationPolygon::SourceGeometryMode);
+VARIANT_ENUM_CAST(NavigationPolygon::NavigationGeometryType);

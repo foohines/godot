@@ -42,8 +42,8 @@ protected:
 	uint32_t navigation_layers = 1;
 	real_t enter_cost = 0.0;
 	real_t travel_cost = 1.0;
-	ObjectID owner_id;
-	NavigationEnums2D::PathSegmentType type;
+	ObjectID owner_id; // Node object id
+	NavigationEnums2D::PathSegmentType type; // region or link
 
 public:
 	NavigationEnums2D::PathSegmentType get_type() const { return type; }
