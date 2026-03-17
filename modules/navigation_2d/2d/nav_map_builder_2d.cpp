@@ -74,6 +74,8 @@ void NavMapBuilder2D::build_navmap_iteration(NavMapIterationBuild2D &r_build) {
 	_build_update_map_iteration(r_build);
 }
 
+
+// inits external_region_connections and navbases_polygons_external_connections
 void NavMapBuilder2D::_build_step_gather_region_polygons(NavMapIterationBuild2D &r_build) {
 	PerformanceData &performance_data = r_build.performance_data;
 	NavMapIteration2D *map_iteration = r_build.map_iteration;
@@ -101,6 +103,7 @@ void NavMapBuilder2D::_build_step_gather_region_polygons(NavMapIterationBuild2D 
 	r_build.polygon_count = polygon_count;
 }
 
+// Fleshes out iter_connection_pairs_map (EdgeConnectionPair) for external region connections 
 void NavMapBuilder2D::_build_step_find_edge_connection_pairs(NavMapIterationBuild2D &r_build) {
 	PerformanceData &performance_data = r_build.performance_data;
 	NavMapIteration2D *map_iteration = r_build.map_iteration;
@@ -153,6 +156,8 @@ void NavMapBuilder2D::_build_step_find_edge_connection_pairs(NavMapIterationBuil
 	r_build.free_edge_count = free_edges_count;
 }
 
+// Fills navbases_polygons_external_connections (EdgeConnectionPair) with perfectly aligned external region polygon edges
+// Fills iter_free_edges with free external region polygon edges
 void NavMapBuilder2D::_build_step_merge_edge_connection_pairs(NavMapIterationBuild2D &r_build) {
 	PerformanceData &performance_data = r_build.performance_data;
 
@@ -188,6 +193,8 @@ void NavMapBuilder2D::_build_step_merge_edge_connection_pairs(NavMapIterationBui
 	}
 }
 
+// likely for not perfectly aligned regions
+// populates navbases_polygons_external_connections AND external_region_connections with non perfectly aligned regions using free_edges
 void NavMapBuilder2D::_build_step_edge_connection_margin_connections(NavMapIterationBuild2D &r_build) {
 	PerformanceData &performance_data = r_build.performance_data;
 	NavMapIteration2D *map_iteration = r_build.map_iteration;
@@ -272,7 +279,7 @@ void NavMapBuilder2D::_build_step_edge_connection_margin_connections(NavMapItera
 void NavMapBuilder2D::_build_step_navlink_connections(NavMapIterationBuild2D &r_build) {
 	NavMapIteration2D *map_iteration = r_build.map_iteration;
 
-	real_t link_connection_radius = r_build.link_connection_radius;
+	real_t link_connection_radius = r_build.link_connection_radius; // defaults to 4.0f ?
 
 	const LocalVector<Ref<NavLinkIteration2D>> &links = map_iteration->link_iterations;
 
@@ -282,8 +289,13 @@ void NavMapBuilder2D::_build_step_navlink_connections(NavMapIterationBuild2D &r_
 
 	HashMap<const NavBaseIteration2D *, LocalVector<LocalVector<Nav2D::Connection>>> &navbases_polygons_external_connections = map_iteration->navbases_polygons_external_connections;
 	LocalVector<Nav2D::Polygon> &navlink_polygons = map_iteration->navlink_polygons;
+	AHashMap<const NavLink2D *, CrossMapLinkConnectionData> &cross_map_link_connection_map = map_iteration->cross_map_link_connection_map;
+
 	navlink_polygons.clear();
 	navlink_polygons.resize(links.size());
+
+	cross_map_link_connection_map.clear();
+
 	uint32_t navlink_index = 0;
 
 	// Search for polygons within range of a nav link.
@@ -298,7 +310,7 @@ void NavMapBuilder2D::_build_step_navlink_connections(NavMapIterationBuild2D &r_
 		const Vector2 link_end_pos = link->get_end_position();
 
 		Polygon *closest_start_polygon = nullptr;
-		real_t closest_start_sqr_dist = link_connection_radius_sqr;
+		real_t closest_start_sqr_dist = link->is_cross_map() ? link_connection_radius_sqr : 0.1;
 		Vector2 closest_start_point;
 
 		Polygon *closest_end_polygon = nullptr;
@@ -307,6 +319,7 @@ void NavMapBuilder2D::_build_step_navlink_connections(NavMapIterationBuild2D &r_
 
 		for (const Ref<NavRegionIteration2D> &region : map_iteration->region_iterations) {
 			Rect2 region_bounds = region->get_bounds().grow(link_connection_radius);
+			// region does not contain neither start nor end position
 			if (!region_bounds.has_point(link_start_pos) && !region_bounds.has_point(link_end_pos)) {
 				continue;
 			}
@@ -343,7 +356,7 @@ void NavMapBuilder2D::_build_step_navlink_connections(NavMapIterationBuild2D &r_
 		}
 
 		// If we have both a start and end point, then create a synthetic polygon to route through.
-		if (closest_start_polygon && closest_end_polygon) {
+		if (closest_start_polygon && closest_end_polygon && !link->is_cross_map()) {
 			new_polygon.vertices.resize(4);
 
 			// Build a set of vertices that create a thin polygon going from the start to the end point.
@@ -384,9 +397,50 @@ void NavMapBuilder2D::_build_step_navlink_connections(NavMapIterationBuild2D &r_
 				exit_connection.edge = -1;
 				exit_connection.pathway_start = new_polygon.vertices[0];
 				exit_connection.pathway_end = new_polygon.vertices[1];
-				navbases_polygons_external_connections[link.ptr()].push_back(LocalVector<Nav2D::Connection>());
+				// navbases_polygons_external_connections[link.ptr()].push_back(LocalVector<Nav2D::Connection>()); // is this necessary? new_polygon.id is always 0
 				navbases_polygons_external_connections[link.ptr()][new_polygon.id].push_back(exit_connection);
 			}
+
+		// for cross-map links, build this map's connections
+		} else if ((closest_start_polygon || closest_end_polygon) && link->is_cross_map()) {
+			navbases_polygons_external_connections[link.ptr()].push_back(LocalVector<Nav2D::Connection>());
+			new_polygon.vertices.resize(4);
+
+			new_polygon.vertices[0] = link->start_position;
+			new_polygon.vertices[1] = link->start_position;
+			new_polygon.vertices[2] = link->end_position;
+			new_polygon.vertices[3] = link->end_position;
+
+				
+			if(closest_start_polygon && link->map == map_iteration->map) {
+				CrossMapLinkConnectionData cross_map_link_connection_data;
+				cross_map_link_connection_data.link = link->link;
+				cross_map_link_connection_data.link_iteration = link.ptr();
+				cross_map_link_connection_data.other_map = link->other_map;
+				cross_map_link_connection_data.map_iteration = map_iteration;
+				cross_map_link_connection_data.position = closest_start_point;
+				cross_map_link_connection_data.ingress = link->is_bidirectional();
+				cross_map_link_connection_data.egress = true;
+				cross_map_link_connection_data.navlink_polygon_index = navlink_index - 1;
+				cross_map_link_connection_data.map_polygon = closest_start_polygon;
+
+				cross_map_link_connection_map.insert(link->link, cross_map_link_connection_data);
+
+			} else if(closest_end_polygon && link->other_map == map_iteration->map) {
+				CrossMapLinkConnectionData cross_map_link_connection_data;
+				cross_map_link_connection_data.link = link->link;
+				cross_map_link_connection_data.link_iteration = link.ptr();
+				cross_map_link_connection_data.other_map = link->map;
+				cross_map_link_connection_data.map_iteration = map_iteration;
+				cross_map_link_connection_data.position = closest_end_point;
+				cross_map_link_connection_data.ingress = true;
+				cross_map_link_connection_data.egress = link->is_bidirectional();
+				cross_map_link_connection_data.navlink_polygon_index = navlink_index - 1;
+				cross_map_link_connection_data.map_polygon = closest_end_polygon;
+
+				cross_map_link_connection_map.insert(link->link, cross_map_link_connection_data);
+			}
+
 		}
 	}
 
@@ -404,6 +458,8 @@ void NavMapBuilder2D::_build_update_map_iteration(NavMapIterationBuild2D &r_buil
 	map_iteration->path_query_slots_mutex.lock();
 	for (NavMeshQueries2D::PathQuerySlot &p_path_query_slot : map_iteration->path_query_slots) {
 		p_path_query_slot.traversable_polys.clear();
+
+		// reserve more for cross map?
 		p_path_query_slot.traversable_polys.reserve(navmesh_polygon_count * 0.25);
 		p_path_query_slot.path_corridor.clear();
 
@@ -424,6 +480,9 @@ void NavMapBuilder2D::_build_update_map_iteration(NavMapIterationBuild2D &r_buil
 			p_path_query_slot.poly_to_id[&polygon] = polygon_id;
 			polygon_id++;
 		}
+
+		// Need to expand for connected maps?
+
 
 		DEV_ASSERT(p_path_query_slot.path_corridor.size() == p_path_query_slot.poly_to_id.size());
 	}

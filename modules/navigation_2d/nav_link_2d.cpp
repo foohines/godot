@@ -52,6 +52,27 @@ void NavLink2D::set_map(NavMap2D *p_map) {
 	}
 }
 
+void NavLink2D::set_other_map(NavMap2D *p_other_map) {
+	if (other_map == p_other_map) {
+		return;
+	}
+
+	ERR_FAIL_COND_MSG(p_other_map && p_other_map == map, "Other_map and map cannot refer to the same map.");
+	cancel_sync_request();
+
+	if (other_map) {
+		other_map->remove_link(this);
+	}
+
+	other_map = p_other_map;
+	iteration_dirty = true;
+	
+	if (other_map) {
+		other_map->add_link(this);
+		request_sync();
+	}
+}
+
 void NavLink2D::set_enabled(bool p_enabled) {
 	if (enabled == p_enabled) {
 		return;
@@ -161,6 +182,9 @@ void NavLink2D::_build_iteration() {
 	Ref<NavLinkIteration2D> new_iteration;
 	new_iteration.instantiate();
 
+	new_iteration->link = this;
+	new_iteration->map = get_map();
+	new_iteration->other_map = get_other_map();
 	new_iteration->navigation_layers = get_navigation_layers();
 	new_iteration->enter_cost = get_enter_cost();
 	new_iteration->travel_cost = get_travel_cost();
@@ -172,6 +196,7 @@ void NavLink2D::_build_iteration() {
 	new_iteration->start_position = get_start_position();
 	new_iteration->end_position = get_end_position();
 	new_iteration->bidirectional = is_bidirectional();
+	new_iteration->cross_map = is_cross_map();
 
 	RWLockWrite write_lock(iteration_rwlock);
 	ERR_FAIL_COND(iteration.is_null());
@@ -185,14 +210,26 @@ void NavLink2D::_build_iteration() {
 }
 
 void NavLink2D::request_sync() {
-	if (map && !sync_dirty_request_list_element.in_list()) {
-		map->add_link_sync_dirty_request(&sync_dirty_request_list_element);
+
+	if (!sync_dirty_request_list_element.in_list()) {
+		if (map) {
+			map->add_link_sync_dirty_request(&sync_dirty_request_list_element);
+		}
+
+		if (other_map) {
+			other_map->add_link_sync_dirty_request(&sync_dirty_request_list_element);
+		}
 	}
 }
 
 void NavLink2D::cancel_sync_request() {
-	if (map && sync_dirty_request_list_element.in_list()) {
-		map->remove_link_sync_dirty_request(&sync_dirty_request_list_element);
+	if (sync_dirty_request_list_element.in_list()) {
+		if (map) {
+			map->remove_link_sync_dirty_request(&sync_dirty_request_list_element);
+		}
+		if (other_map) {
+			other_map->remove_link_sync_dirty_request(&sync_dirty_request_list_element);
+		}
 	}
 }
 

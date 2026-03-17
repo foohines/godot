@@ -34,6 +34,8 @@
 #include "2d/nav_mesh_queries_2d.h"
 #include "nav_rid_2d.h"
 #include "nav_utils_2d.h"
+#include "core/templates/rid_owner.h"
+#include "core/templates/local_vector.h"
 
 #include "core/math/math_defs.h"
 #include "core/object/worker_thread_pool.h"
@@ -48,6 +50,9 @@ class NavAgent2D;
 class NavObstacle2D;
 
 class NavMap2D : public NavRid2D {
+
+	RID_Owner<NavMap2D>* owner = nullptr;
+
 	/// To find the polygons edges the vertices are displaced in a grid where
 	/// each cell has the following cell_size.
 	real_t cell_size = NavigationDefaults2D::NAV_MESH_CELL_SIZE;
@@ -146,9 +151,20 @@ class NavMap2D : public NavRid2D {
 	void _build_iteration();
 	void _sync_iteration();
 
-public:
+	LocalVector<NavMapIterationRead2D> get_linked_map_iteration_locks();
+	AHashMap<NavMap2D*, NavMeshQueries2D::PathQueryMapData> build_path_query_map_data_map(const LocalVector<NavMapIterationRead2D> &iteration_locks);
+	void free_path_query_slots_for_query(AHashMap<NavMap2D*, NavMeshQueries2D::PathQueryMapData> &maps_to_path_query_map_data);
+	
+	public:
 	NavMap2D();
 	~NavMap2D();
+	
+	const RID_Owner<NavMap2D>* get_owner() const;
+	void set_owner(RID_Owner<NavMap2D>* p_owner);
+	
+	NavMapIterationRead2D get_current_iteration_read_lock();
+	NavMeshQueries2D::PathQuerySlot* requisition_path_query_slot(NavMapIteration2D &map_iteration);
+	void free_path_query_slot(NavMapIteration2D &map_iteration, NavMeshQueries2D::PathQuerySlot &path_query_slot);
 
 	uint32_t get_iteration_id() const { return iteration_id; }
 
@@ -182,9 +198,9 @@ public:
 
 	void query_path(NavMeshQueries2D::NavMeshPathQueryTask2D &p_query_task);
 
-	Vector2 get_closest_point(const Vector2 &p_point) const;
-	Nav2D::ClosestPointQueryResult get_closest_point_info(const Vector2 &p_point) const;
-	RID get_closest_point_owner(const Vector2 &p_point) const;
+	Vector2 get_closest_point(const Vector2 &p_point);
+	Nav2D::ClosestPointQueryResult get_closest_point_info(const Vector2 &p_point);
+	RID get_closest_point_owner(const Vector2 &p_point);
 
 	void add_region(NavRegion2D *p_region);
 	void remove_region(NavRegion2D *p_region);
@@ -215,7 +231,7 @@ public:
 		return obstacles;
 	}
 
-	Vector2 get_random_point(uint32_t p_navigation_layers, bool p_uniformly) const;
+	Vector2 get_random_point(uint32_t p_navigation_layers, bool p_uniformly);
 
 	void sync();
 	void step(double p_delta_time);
@@ -232,9 +248,9 @@ public:
 	int get_pm_edge_free_count() const { return performance_data.pm_edge_free_count; }
 	int get_pm_obstacle_count() const { return performance_data.pm_obstacle_count; }
 
-	int get_region_connections_count(NavRegion2D *p_region) const;
-	Vector2 get_region_connection_pathway_start(NavRegion2D *p_region, int p_connection_id) const;
-	Vector2 get_region_connection_pathway_end(NavRegion2D *p_region, int p_connection_id) const;
+	int get_region_connections_count(NavRegion2D *p_region);
+	Vector2 get_region_connection_pathway_start(NavRegion2D *p_region, int p_connection_id);
+	Vector2 get_region_connection_pathway_end(NavRegion2D *p_region, int p_connection_id);
 
 	void add_region_async_thread_join_request(SelfList<NavRegion2D> *p_async_request);
 	void remove_region_async_thread_join_request(SelfList<NavRegion2D> *p_async_request);

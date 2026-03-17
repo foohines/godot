@@ -56,6 +56,14 @@ RID NavigationPathQueryParameters2D::get_map() const {
 	return map;
 }
 
+void NavigationPathQueryParameters2D::set_destination_map(RID p_destination_map) {
+	destination_map = p_destination_map;
+}
+
+RID NavigationPathQueryParameters2D::get_destination_map() const {
+	return destination_map;
+}
+
 void NavigationPathQueryParameters2D::set_start_position(Vector2 p_start_position) {
 	start_position = p_start_position;
 }

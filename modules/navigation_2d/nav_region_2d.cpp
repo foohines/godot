@@ -241,6 +241,7 @@ void NavRegion2D::_build_iteration() {
 	Ref<NavRegionIteration2D> new_iteration;
 	new_iteration.instantiate();
 
+	new_iteration->map = get_map();
 	new_iteration->navigation_layers = get_navigation_layers();
 	new_iteration->enter_cost = get_enter_cost();
 	new_iteration->travel_cost = get_travel_cost();

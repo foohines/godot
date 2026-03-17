@@ -38,17 +38,20 @@
 #include "servers/navigation_2d/navigation_constants_2d.h"
 
 class NavBaseIteration2D;
+class NavMap2D;
 
 namespace Nav2D {
 struct Polygon;
 
+// Key for a point in the nav mesh rasterization and region edge merging?
+// with the union, I guess x and y overwrite key, so the hash functions are actually comparing `{x}{y}` to `{x}{y}`.
 union PointKey {
 	struct {
 		int64_t x : 32;
 		int64_t y : 32;
 	};
 
-	uint64_t key = 0;
+	uint64_t key = 0; // Always set to 0, i think. overwritten by x,y everywhere
 };
 
 struct EdgeKey {
@@ -108,6 +111,7 @@ struct Polygon {
 struct NavigationPoly {
 	/// This poly.
 	const Polygon *poly = nullptr;
+	const NavMap2D *map = nullptr;
 
 	/// Index in the heap of traversable polygons.
 	uint32_t traversable_poly_index = UINT32_MAX;
@@ -117,6 +121,7 @@ struct NavigationPoly {
 	int back_navigation_edge = -1;
 	Vector2 back_navigation_edge_pathway_start;
 	Vector2 back_navigation_edge_pathway_end;
+	NavMap2D *back_navigation_map = nullptr;
 
 	/// The entry position of this poly.
 	Vector2 entry;

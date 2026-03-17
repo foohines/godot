@@ -29,6 +29,7 @@
 /**************************************************************************/
 
 #include "nav_mesh_queries_2d.h"
+#include "godot_navigation_server_2d.h"
 
 #include "../nav_base_2d.h"
 #include "../nav_map_2d.h"
@@ -36,6 +37,9 @@
 #include "nav_region_iteration_2d.h"
 
 #include "core/math/geometry_2d.h"
+
+#include "core/variant/variant_utility.h"
+#include <chrono>
 
 using namespace Nav2D;
 
@@ -145,7 +149,7 @@ void NavMeshQueries2D::_query_task_push_back_point_with_metadata(NavMeshPathQuer
 	p_query_task.path_points.push_back(p_point);
 }
 
-void NavMeshQueries2D::map_query_path(NavMap2D *p_map, const Ref<NavigationPathQueryParameters2D> &p_query_parameters, Ref<NavigationPathQueryResult2D> p_query_result, const Callable &p_callback) {
+void NavMeshQueries2D::map_query_path(NavMap2D *p_map, NavMap2D *p_destination_map, const Ref<NavigationPathQueryParameters2D> &p_query_parameters, Ref<NavigationPathQueryResult2D> p_query_result, const Callable &p_callback) {
 	ERR_FAIL_NULL(p_map);
 	ERR_FAIL_COND(p_query_parameters.is_null());
 	ERR_FAIL_COND(p_query_result.is_null());
@@ -157,6 +161,8 @@ void NavMeshQueries2D::map_query_path(NavMap2D *p_map, const Ref<NavigationPathQ
 	query_task.target_position = p_query_parameters->get_target_position();
 	query_task.navigation_layers = p_query_parameters->get_navigation_layers();
 	query_task.callback = p_callback;
+	query_task.map = p_map;
+	query_task.destination_map = p_destination_map;
 
 	const TypedArray<RID> &_excluded_regions = p_query_parameters->get_excluded_regions();
 	const TypedArray<RID> &_included_regions = p_query_parameters->get_included_regions();
@@ -234,13 +240,23 @@ void NavMeshQueries2D::map_query_path(NavMap2D *p_map, const Ref<NavigationPathQ
 	}
 }
 
-void NavMeshQueries2D::_query_task_find_start_end_positions(NavMeshPathQueryTask2D &p_query_task, const NavMapIteration2D &p_map_iteration) {
-	real_t begin_d = FLT_MAX;
-	real_t end_d = FLT_MAX;
+void NavMeshQueries2D::_query_task_find_start_end_positions(NavMeshPathQueryTask2D &p_query_task, AHashMap<NavMap2D *, PathQueryMapData> &maps_to_path_query_map_data) {
+	NavMapIteration2D *start_map_iteration = maps_to_path_query_map_data.get(p_query_task.map).iteration;
+	NavMapIteration2D *destination_map_iteration = maps_to_path_query_map_data.get(p_query_task.destination_map).iteration;
+	NavMeshQueries2D::PolygonPositionResult begin_polygon_result = _query_task_find_polygon_for_position(p_query_task, *start_map_iteration, p_query_task.start_position);
+	NavMeshQueries2D::PolygonPositionResult end_polygon_result = _query_task_find_polygon_for_position(p_query_task, *destination_map_iteration, p_query_task.target_position);
 
-	const LocalVector<Ref<NavRegionIteration2D>> &regions = p_map_iteration.region_iterations;
+	p_query_task.begin_polygon = begin_polygon_result.polygon;
+	p_query_task.begin_position = begin_polygon_result.position;
+	p_query_task.end_polygon = end_polygon_result.polygon;
+	p_query_task.end_position = end_polygon_result.position;
+}
 
-	for (const Ref<NavRegionIteration2D> &region : regions) {
+NavMeshQueries2D::PolygonPositionResult NavMeshQueries2D::_query_task_find_polygon_for_position(NavMeshPathQueryTask2D &p_query_task, NavMapIteration2D &map_iteration, Vector2 &position) {
+	real_t min_distance = FLT_MAX;
+	NavMeshQueries2D::PolygonPositionResult result;
+
+	for (const Ref<NavRegionIteration2D> &region : map_iteration.region_iterations) {
 		if (!_query_task_is_connection_owner_usable(p_query_task, region.ptr())) {
 			continue;
 		}
@@ -256,37 +272,100 @@ void NavMeshQueries2D::_query_task_find_start_end_positions(NavMeshPathQueryTask
 			for (uint32_t point_id = 2; point_id < p.vertices.size(); point_id++) {
 				const Triangle2 triangle(p.vertices[0], p.vertices[point_id - 1], p.vertices[point_id]);
 
-				Vector2 point = triangle.get_closest_point_to(p_query_task.start_position);
-				real_t distance_to_point = point.distance_to(p_query_task.start_position);
-				if (distance_to_point < begin_d) {
-					begin_d = distance_to_point;
-					p_query_task.begin_polygon = &p;
-					p_query_task.begin_position = point;
-				}
-
-				point = triangle.get_closest_point_to(p_query_task.target_position);
-				distance_to_point = point.distance_to(p_query_task.target_position);
-				if (distance_to_point < end_d) {
-					end_d = distance_to_point;
-					p_query_task.end_polygon = &p;
-					p_query_task.end_position = point;
+				Vector2 point = triangle.get_closest_point_to(position);
+				real_t distance_to_point = point.distance_to(position);
+				if (distance_to_point < min_distance) {
+					min_distance = distance_to_point;
+					result.polygon = &p;
+					result.position = point;
 				}
 			}
 		}
 	}
+
+	return result;
 }
 
-void NavMeshQueries2D::_query_task_search_polygon_connections(NavMeshPathQueryTask2D &p_query_task, const Connection &p_connection, uint32_t p_least_cost_id, const NavigationPoly &p_least_cost_poly, real_t p_poly_enter_cost, const Vector2 &p_end_point) {
-	const NavBaseIteration2D *connection_owner = p_connection.polygon->owner;
+void NavMeshQueries2D::_query_task_populate_cross_map_connections(NavMeshPathQueryTask2D &p_query_task, AHashMap<NavMap2D *, PathQueryMapData> &maps_to_path_query_map_data) {
+	HashMap<const Nav2D::Polygon *, LocalVector<Nav2D::Connection>> &poly_to_cross_map_connections = p_query_task.path_query_slot->poly_to_cross_map_connections; 
+	AHashMap<const CrossMapLinkConnectionData *, bool> is_connected_map;
+	for (AHashMap<NavMap2D *, NavMeshQueries2D::PathQueryMapData>::Iterator it = maps_to_path_query_map_data.begin(); it; ++it) {
+		NavMapIteration2D *map_iteration = it->value.iteration;
+
+		for (AHashMap<const NavLink2D *, CrossMapLinkConnectionData>::Iterator connection_it = map_iteration->cross_map_link_connection_map.begin(); connection_it; ++connection_it) {
+			CrossMapLinkConnectionData &connection_data = connection_it->value;
+			const NavLink2D *link = connection_data.link;
+			if (is_connected_map.has(&connection_data)) {
+				continue;
+			}
+
+			NavMap2D *other_map = connection_data.other_map;
+			if (!maps_to_path_query_map_data.has(other_map)) {
+				continue;
+			}
+
+			NavMapIteration2D *other_map_iteration = maps_to_path_query_map_data.get(other_map).iteration;
+
+			if (!other_map_iteration || !other_map_iteration->cross_map_link_connection_map.has(link)) {
+				continue;
+			}
+			CrossMapLinkConnectionData &other_connection_data = other_map_iteration->cross_map_link_connection_map.get(link);
+
+			if (connection_data.egress && other_connection_data.ingress) {
+				Connection egress_entry_connection;
+				egress_entry_connection.pathway_start = connection_data.position;
+				egress_entry_connection.pathway_end = connection_data.position;
+				egress_entry_connection.polygon = &map_iteration->navlink_polygons[connection_data.navlink_polygon_index];
+
+				Connection egress_exit_connection;
+				egress_exit_connection.pathway_start = other_connection_data.position;
+				egress_exit_connection.pathway_end = other_connection_data.position;
+				egress_exit_connection.polygon = other_connection_data.map_polygon; 
+
+
+				poly_to_cross_map_connections[connection_data.map_polygon].push_back(egress_entry_connection);
+				poly_to_cross_map_connections[egress_entry_connection.polygon].push_back(egress_exit_connection);
+			}
+
+			if (connection_data.ingress && other_connection_data.egress) {
+				Connection ingress_entry_connection;
+				ingress_entry_connection.pathway_start = other_connection_data.position;
+				ingress_entry_connection.pathway_end = other_connection_data.position;
+				ingress_entry_connection.polygon =  &other_map_iteration->navlink_polygons[other_connection_data.navlink_polygon_index];
+
+				Connection ingress_exit_connection;
+				ingress_exit_connection.pathway_start = connection_data.position;
+				ingress_exit_connection.pathway_end = connection_data.position;
+				ingress_exit_connection.polygon = connection_data.map_polygon;
+
+				poly_to_cross_map_connections[other_connection_data.map_polygon].push_back(ingress_entry_connection);
+				poly_to_cross_map_connections[ingress_entry_connection.polygon].push_back(ingress_exit_connection);
+			}
+
+			is_connected_map.insert(&connection_data, true);
+			is_connected_map.insert(&other_connection_data, true);
+
+			
+		}
+	}
+}
+
+void NavMeshQueries2D::_query_task_search_polygon_connections(NavMeshPathQueryTask2D &p_query_task, AHashMap<NavMap2D *, PathQueryMapData> &maps_to_path_query_map_data, const Connection &p_connection, uint32_t p_least_cost_id, const NavigationPoly &p_least_cost_poly, real_t p_poly_enter_cost, const Vector2 &p_end_point) {
+	const NavBaseIteration2D *connection_owner = p_connection.polygon->owner; // region or link
+	NavMap2D* least_cost_map = p_least_cost_poly.poly->owner->map;
+
+	NavMap2D* connection_map = connection_owner->map;
+	PathQuerySlot* connection_query_slot = maps_to_path_query_map_data[connection_map].query_slot;
+
 	ERR_FAIL_NULL(connection_owner);
-	const bool owner_is_usable = _query_task_is_connection_owner_usable(p_query_task, connection_owner);
+	const bool owner_is_usable = _query_task_is_connection_owner_usable(p_query_task, connection_owner); // check enabled, nav-layers, etc.
 	if (!owner_is_usable) {
 		return;
 	}
 
 	Heap<NavigationPoly *, NavPolyTravelCostGreaterThan, NavPolyHeapIndexer>
 			&traversable_polys = p_query_task.path_query_slot->traversable_polys;
-	LocalVector<NavigationPoly> &navigation_polys = p_query_task.path_query_slot->path_corridor;
+	LocalVector<NavigationPoly> &navigation_polys = connection_query_slot->path_corridor;
 
 	real_t poly_travel_cost = p_least_cost_poly.poly->owner->get_travel_cost();
 
@@ -294,9 +373,10 @@ void NavMeshQueries2D::_query_task_search_polygon_connections(NavMeshPathQueryTa
 	real_t new_traveled_distance = p_least_cost_poly.entry.distance_to(new_entry) * poly_travel_cost + p_poly_enter_cost + p_least_cost_poly.traveled_distance;
 
 	// Check if the neighbor polygon has already been processed.
-	NavigationPoly &neighbor_poly = navigation_polys[p_query_task.path_query_slot->poly_to_id[p_connection.polygon]];
+	NavigationPoly &neighbor_poly = navigation_polys[connection_query_slot->poly_to_id[p_connection.polygon]];
 	if (new_traveled_distance < neighbor_poly.traveled_distance) {
 		// Add the polygon to the heap of polygons to traverse next.
+		neighbor_poly.back_navigation_map = least_cost_map;
 		neighbor_poly.back_navigation_poly_id = p_least_cost_id;
 		neighbor_poly.back_navigation_edge = p_connection.edge;
 		neighbor_poly.back_navigation_edge_pathway_start = p_connection.pathway_start;
@@ -316,25 +396,31 @@ void NavMeshQueries2D::_query_task_search_polygon_connections(NavMeshPathQueryTa
 	}
 }
 
-void NavMeshQueries2D::_query_task_build_path_corridor(NavMeshPathQueryTask2D &p_query_task, const NavMapIteration2D &p_map_iteration) {
+void NavMeshQueries2D::_query_task_build_path_corridor(NavMeshPathQueryTask2D &p_query_task, AHashMap<NavMap2D *, PathQueryMapData> &maps_to_path_query_map_data) {
 	const Vector2 p_target_position = p_query_task.target_position;
 	const Polygon *begin_poly = p_query_task.begin_polygon;
 	const Polygon *end_poly = p_query_task.end_polygon;
 	Vector2 begin_point = p_query_task.begin_position;
 	Vector2 end_point = p_query_task.end_position;
 
+	// Populate cross-map connections
+	_query_task_populate_cross_map_connections(p_query_task, maps_to_path_query_map_data);
+	HashMap<const Nav2D::Polygon *, LocalVector<Nav2D::Connection>> cross_map_connections = p_query_task.path_query_slot->poly_to_cross_map_connections;
+
 	// Heap of polygons to travel next.
 	Heap<NavigationPoly *, NavPolyTravelCostGreaterThan, NavPolyHeapIndexer>
 			&traversable_polys = p_query_task.path_query_slot->traversable_polys;
 	traversable_polys.clear();
 
-	LocalVector<NavigationPoly> &navigation_polys = p_query_task.path_query_slot->path_corridor;
-	for (NavigationPoly &polygon : navigation_polys) {
-		polygon.reset();
+	// Clear nav-polygons for all connected maps
+	for (AHashMap<NavMap2D *, NavMeshQueries2D::PathQueryMapData>::Iterator it = maps_to_path_query_map_data.begin(); it; ++it) {
+		for (NavigationPoly &polygon : it->value.query_slot->path_corridor) {
+			polygon.reset();
+		}	
 	}
 
 	// Initialize the matching navigation polygon.
-	NavigationPoly &begin_navigation_poly = navigation_polys[p_query_task.path_query_slot->poly_to_id[begin_poly]];
+	NavigationPoly &begin_navigation_poly = p_query_task.path_query_slot->path_corridor[p_query_task.path_query_slot->poly_to_id[begin_poly]];
 	begin_navigation_poly.poly = begin_poly;
 	begin_navigation_poly.entry = begin_point;
 	begin_navigation_poly.back_navigation_edge_pathway_start = begin_point;
@@ -342,6 +428,7 @@ void NavMeshQueries2D::_query_task_build_path_corridor(NavMeshPathQueryTask2D &p
 	begin_navigation_poly.traveled_distance = 0.f;
 
 	// This is an implementation of the A* algorithm.
+	NavMap2D *least_cost_map = p_query_task.map;
 	uint32_t least_cost_id = p_query_task.path_query_slot->poly_to_id[begin_poly];
 	bool found_route = false;
 
@@ -349,8 +436,6 @@ void NavMeshQueries2D::_query_task_build_path_corridor(NavMeshPathQueryTask2D &p
 	real_t distance_to_reachable_end = FLT_MAX;
 	bool is_reachable = true;
 	real_t poly_enter_cost = 0.0;
-
-	const HashMap<const NavBaseIteration2D *, LocalVector<LocalVector<Nav2D::Connection>>> &navbases_polygons_external_connections = p_map_iteration.navbases_polygons_external_connections;
 
 	// True if we reached the max polygon search count or distance from the begin position.
 	bool path_search_max_reached = false;
@@ -364,9 +449,14 @@ void NavMeshQueries2D::_query_task_build_path_corridor(NavMeshPathQueryTask2D &p
 	bool has_path_search_max = p_query_task.path_search_max_polygons > 0 || path_search_max_distance_sqr > 0.0;
 
 	while (true) {
+		LocalVector<Nav2D::NavigationPoly> &navigation_polys = maps_to_path_query_map_data[least_cost_map].query_slot->path_corridor;
 		const NavigationPoly &least_cost_poly = navigation_polys[least_cost_id];
 
 		const NavBaseIteration2D *least_cost_navbase = least_cost_poly.poly->owner;
+
+		NavMapIteration2D *least_cost_map_iteration = maps_to_path_query_map_data.get(least_cost_map).iteration;
+
+		const HashMap<const NavBaseIteration2D *, LocalVector<LocalVector<Nav2D::Connection>>> &navbases_polygons_external_connections = least_cost_map_iteration->navbases_polygons_external_connections;
 
 		processed_polygon_count += 1;
 
@@ -377,13 +467,21 @@ void NavMeshQueries2D::_query_task_build_path_corridor(NavMeshPathQueryTask2D &p
 			const LocalVector<Connection> &polygon_connections = navbase_polygons_to_connections[navbase_local_polygon_id];
 
 			for (const Connection &connection : polygon_connections) {
-				_query_task_search_polygon_connections(p_query_task, connection, least_cost_id, least_cost_poly, poly_enter_cost, end_point);
+				_query_task_search_polygon_connections(p_query_task, maps_to_path_query_map_data, connection, least_cost_id, least_cost_poly, poly_enter_cost, end_point);
 			}
 		}
 
 		// Search region external navmesh polygon connections, aka connections to other regions created by outline edge merge or links.
 		for (const Connection &connection : navbases_polygons_external_connections[least_cost_navbase][navbase_local_polygon_id]) {
-			_query_task_search_polygon_connections(p_query_task, connection, least_cost_id, least_cost_poly, poly_enter_cost, end_point);
+			_query_task_search_polygon_connections(p_query_task, maps_to_path_query_map_data, connection, least_cost_id, least_cost_poly, poly_enter_cost, end_point);
+		}
+
+
+		// search cross map links
+		if (p_query_task.path_query_slot->poly_to_cross_map_connections.has(least_cost_poly.poly)) {
+			for (const Connection &connection : p_query_task.path_query_slot->poly_to_cross_map_connections.get(least_cost_poly.poly)) {
+				_query_task_search_polygon_connections(p_query_task, maps_to_path_query_map_data, connection, least_cost_id, least_cost_poly, poly_enter_cost, end_point);
+			}
 		}
 
 		if (has_path_search_max && !path_search_max_reached) {
@@ -454,27 +552,34 @@ void NavMeshQueries2D::_query_task_build_path_corridor(NavMeshPathQueryTask2D &p
 			navigation_polys[_bp_id].poly = begin_poly;
 			navigation_polys[_bp_id].traveled_distance = 0;
 			least_cost_id = _bp_id;
+			least_cost_map = p_query_task.map;
 			reachable_end = nullptr;
 		} else {
 			// Pop the polygon with the lowest travel cost from the heap of traversable polygons.
-			least_cost_id = p_query_task.path_query_slot->poly_to_id[traversable_polys.pop()->poly];
+			NavigationPoly *next_nav_poly = traversable_polys.pop();
+			least_cost_map = next_nav_poly->poly->owner->map;
+			least_cost_id = maps_to_path_query_map_data[least_cost_map].query_slot->poly_to_id[next_nav_poly->poly];
+			// least_cost_id = p_query_task.path_query_slot->poly_to_id[traversable_polys.pop()->poly];
+
+			LocalVector<Nav2D::NavigationPoly> &next_navigation_polys = maps_to_path_query_map_data[least_cost_map].query_slot->path_corridor;
+
 
 			// Store the farthest reachable end polygon in case our goal is not reachable.
 			if (is_reachable) {
-				real_t distance = navigation_polys[least_cost_id].entry.distance_squared_to(p_target_position);
+				real_t distance = next_navigation_polys[least_cost_id].entry.distance_squared_to(p_target_position);
 				if (distance_to_reachable_end > distance) {
 					distance_to_reachable_end = distance;
-					reachable_end = navigation_polys[least_cost_id].poly;
+					reachable_end = next_navigation_polys[least_cost_id].poly;
 				}
 			}
 
 			// Check if we reached the end
-			if (navigation_polys[least_cost_id].poly == end_poly) {
+			if (next_navigation_polys[least_cost_id].poly == end_poly) {
 				found_route = true;
 				break;
 			}
 
-			if (navigation_polys[least_cost_id].poly->owner->get_self() != least_cost_poly.poly->owner->get_self()) {
+			if (next_navigation_polys[least_cost_id].poly->owner->get_self() != least_cost_poly.poly->owner->get_self()) {
 				ERR_FAIL_NULL(least_cost_poly.poly->owner);
 				poly_enter_cost = least_cost_poly.poly->owner->get_enter_cost();
 			}
@@ -508,13 +613,14 @@ void NavMeshQueries2D::_query_task_build_path_corridor(NavMeshPathQueryTask2D &p
 		p_query_task.begin_position = begin_point;
 		p_query_task.begin_polygon = begin_poly;
 		p_query_task.least_cost_id = least_cost_id;
+		p_query_task.least_cost_map = least_cost_map;
 	}
 }
-
-void NavMeshQueries2D::query_task_map_iteration_get_path(NavMeshPathQueryTask2D &p_query_task, const NavMapIteration2D &p_map_iteration) {
+// query_task_map_iteration_get_path(NavMeshPathQueryTask2D &p_query_task, AHashMap<NavMap2D*, PathQueryMapData> &maps_to_path_query_map_data)
+void NavMeshQueries2D::query_task_map_iteration_get_path(NavMeshPathQueryTask2D &p_query_task, AHashMap<NavMap2D *, PathQueryMapData> &maps_to_path_query_map_data) {
 	p_query_task.path_clear();
 
-	_query_task_find_start_end_positions(p_query_task, p_map_iteration);
+	_query_task_find_start_end_positions(p_query_task, maps_to_path_query_map_data);
 
 	// Check for trivial cases.
 	if (!p_query_task.begin_polygon || !p_query_task.end_polygon) {
@@ -530,7 +636,7 @@ void NavMeshQueries2D::query_task_map_iteration_get_path(NavMeshPathQueryTask2D 
 		return;
 	}
 
-	_query_task_build_path_corridor(p_query_task, p_map_iteration);
+	_query_task_build_path_corridor(p_query_task, maps_to_path_query_map_data);
 
 	if (p_query_task.status == NavMeshPathQueryTask2D::TaskStatus::QUERY_FINISHED || p_query_task.status == NavMeshPathQueryTask2D::TaskStatus::QUERY_FAILED) {
 		_query_task_process_path_result_limits(p_query_task);
@@ -540,17 +646,17 @@ void NavMeshQueries2D::query_task_map_iteration_get_path(NavMeshPathQueryTask2D 
 	// Post-Process path.
 	switch (p_query_task.path_postprocessing) {
 		case PathPostProcessing::PATH_POSTPROCESSING_CORRIDORFUNNEL: {
-			_query_task_post_process_corridorfunnel(p_query_task);
+			_query_task_post_process_corridorfunnel(p_query_task, maps_to_path_query_map_data);
 		} break;
 		case PathPostProcessing::PATH_POSTPROCESSING_EDGECENTERED: {
-			_query_task_post_process_edgecentered(p_query_task);
+			_query_task_post_process_edgecentered(p_query_task, maps_to_path_query_map_data);
 		} break;
 		case PathPostProcessing::PATH_POSTPROCESSING_NONE: {
-			_query_task_post_process_nopostprocessing(p_query_task);
+			_query_task_post_process_nopostprocessing(p_query_task, maps_to_path_query_map_data);
 		} break;
 		default: {
 			WARN_PRINT("No match for used PathPostProcessing - fallback to default");
-			_query_task_post_process_corridorfunnel(p_query_task);
+			_query_task_post_process_corridorfunnel(p_query_task, maps_to_path_query_map_data);
 		} break;
 	}
 
@@ -733,23 +839,24 @@ void NavMeshQueries2D::_query_task_simplified_path_points(NavMeshPathQueryTask2D
 	}
 }
 
-void NavMeshQueries2D::_query_task_post_process_corridorfunnel(NavMeshPathQueryTask2D &p_query_task) {
+void NavMeshQueries2D::_query_task_post_process_corridorfunnel(NavMeshPathQueryTask2D &p_query_task, AHashMap<NavMap2D *, PathQueryMapData> &maps_to_path_query_map_data) {
 	Vector2 end_point = p_query_task.end_position;
 	const Polygon *end_poly = p_query_task.end_polygon;
 	Vector2 begin_point = p_query_task.begin_position;
 	const Polygon *begin_poly = p_query_task.begin_polygon;
 	uint32_t least_cost_id = p_query_task.least_cost_id;
-	LocalVector<NavigationPoly> &navigation_polys = p_query_task.path_query_slot->path_corridor;
+	NavMap2D* least_cost_map = p_query_task.least_cost_map;
+	LocalVector<NavigationPoly> *navigation_polys = &maps_to_path_query_map_data[least_cost_map].query_slot->path_corridor;
 
 	// Set the apex poly/point to the end point.
-	NavigationPoly *apex_poly = &navigation_polys[least_cost_id];
-
+	NavigationPoly *apex_poly = &(*navigation_polys)[least_cost_id];
 	const Vector2 back_edge_closest_point = Geometry2D::get_closest_point_to_segment(end_point, apex_poly->back_navigation_edge_pathway_start, apex_poly->back_navigation_edge_pathway_end);
 	if (end_point.is_equal_approx(back_edge_closest_point)) {
 		// The end point is basically on top of the last crossed edge, funneling around the corners would at best do nothing.
 		// At worst it would add an unwanted path point before the last point due to precision issues so skip to the next polygon.
 		if (apex_poly->back_navigation_poly_id != -1) {
-			apex_poly = &navigation_polys[apex_poly->back_navigation_poly_id];
+			navigation_polys = &maps_to_path_query_map_data[apex_poly->back_navigation_map].query_slot->path_corridor;
+			apex_poly = &(*navigation_polys)[apex_poly->back_navigation_poly_id];
 		}
 	}
 
@@ -779,7 +886,7 @@ void NavMeshQueries2D::_query_task_post_process_corridorfunnel(NavMeshPathQueryT
 				left_poly = p;
 				left_portal = left;
 			} else {
-				_query_task_clip_path(p_query_task, apex_poly, right_portal, right_poly);
+				_query_task_clip_path(p_query_task, maps_to_path_query_map_data, apex_poly, right_portal, right_poly);
 
 				apex_point = right_portal;
 				p = right_poly;
@@ -799,7 +906,7 @@ void NavMeshQueries2D::_query_task_post_process_corridorfunnel(NavMeshPathQueryT
 				right_poly = p;
 				right_portal = right;
 			} else {
-				_query_task_clip_path(p_query_task, apex_poly, left_portal, left_poly);
+				_query_task_clip_path(p_query_task, maps_to_path_query_map_data, apex_poly, left_portal, left_poly);
 
 				apex_point = left_portal;
 				p = left_poly;
@@ -814,7 +921,8 @@ void NavMeshQueries2D::_query_task_post_process_corridorfunnel(NavMeshPathQueryT
 
 		// Go to the previous polygon.
 		if (p->back_navigation_poly_id != -1) {
-			p = &navigation_polys[p->back_navigation_poly_id];
+			navigation_polys = &maps_to_path_query_map_data[p->back_navigation_map].query_slot->path_corridor;
+			p = &(*navigation_polys)[p->back_navigation_poly_id];
 		} else {
 			// The end
 			p = nullptr;
@@ -827,51 +935,59 @@ void NavMeshQueries2D::_query_task_post_process_corridorfunnel(NavMeshPathQueryT
 	}
 }
 
-void NavMeshQueries2D::_query_task_post_process_edgecentered(NavMeshPathQueryTask2D &p_query_task) {
+void NavMeshQueries2D::_query_task_post_process_edgecentered(NavMeshPathQueryTask2D &p_query_task, AHashMap<NavMap2D *, PathQueryMapData> &maps_to_path_query_map_data) {
 	Vector2 end_point = p_query_task.end_position;
 	const Polygon *end_poly = p_query_task.end_polygon;
 	Vector2 begin_point = p_query_task.begin_position;
 	const Polygon *begin_poly = p_query_task.begin_polygon;
 	uint32_t least_cost_id = p_query_task.least_cost_id;
-	LocalVector<NavigationPoly> &navigation_polys = p_query_task.path_query_slot->path_corridor;
+	NavMap2D* least_cost_map = p_query_task.least_cost_map;
+
+	LocalVector<NavigationPoly> *navigation_polys = &maps_to_path_query_map_data[least_cost_map].query_slot->path_corridor;
 
 	_query_task_push_back_point_with_metadata(p_query_task, end_point, end_poly);
 
 	// Add mid points.
 	int np_id = least_cost_id;
-	while (np_id != -1 && navigation_polys[np_id].back_navigation_poly_id != -1) {
-		if (navigation_polys[np_id].back_navigation_edge != -1) {
-			int prev = navigation_polys[np_id].back_navigation_edge;
-			int prev_n = (navigation_polys[np_id].back_navigation_edge + 1) % navigation_polys[np_id].poly->vertices.size();
-			Vector2 point = (navigation_polys[np_id].poly->vertices[prev] + navigation_polys[np_id].poly->vertices[prev_n]) * 0.5;
+	while (np_id != -1 && (*navigation_polys)[np_id].back_navigation_poly_id != -1) {
+		if ((*navigation_polys)[np_id].back_navigation_edge != -1) {
+			int prev = (*navigation_polys)[np_id].back_navigation_edge;
+			int prev_n = ((*navigation_polys)[np_id].back_navigation_edge + 1) % (*navigation_polys)[np_id].poly->vertices.size();
+			Vector2 point = ((*navigation_polys)[np_id].poly->vertices[prev] + (*navigation_polys)[np_id].poly->vertices[prev_n]) * 0.5;
 
-			_query_task_push_back_point_with_metadata(p_query_task, point, navigation_polys[np_id].poly);
+			_query_task_push_back_point_with_metadata(p_query_task, point, (*navigation_polys)[np_id].poly);
 		} else {
-			_query_task_push_back_point_with_metadata(p_query_task, navigation_polys[np_id].entry, navigation_polys[np_id].poly);
+			_query_task_push_back_point_with_metadata(p_query_task, (*navigation_polys)[np_id].entry, (*navigation_polys)[np_id].poly);
 		}
 
-		np_id = navigation_polys[np_id].back_navigation_poly_id;
+		least_cost_map = (*navigation_polys)[np_id].back_navigation_map;
+		np_id = (*navigation_polys)[np_id].back_navigation_poly_id;
+		navigation_polys = &maps_to_path_query_map_data[least_cost_map].query_slot->path_corridor;
 	}
 
 	_query_task_push_back_point_with_metadata(p_query_task, begin_point, begin_poly);
 }
 
-void NavMeshQueries2D::_query_task_post_process_nopostprocessing(NavMeshPathQueryTask2D &p_query_task) {
+void NavMeshQueries2D::_query_task_post_process_nopostprocessing(NavMeshPathQueryTask2D &p_query_task, AHashMap<NavMap2D *, PathQueryMapData> &maps_to_path_query_map_data) {
 	Vector2 end_point = p_query_task.end_position;
 	const Polygon *end_poly = p_query_task.end_polygon;
 	Vector2 begin_point = p_query_task.begin_position;
 	const Polygon *begin_poly = p_query_task.begin_polygon;
 	uint32_t least_cost_id = p_query_task.least_cost_id;
-	LocalVector<NavigationPoly> &navigation_polys = p_query_task.path_query_slot->path_corridor;
+	NavMap2D* least_cost_map = p_query_task.least_cost_map;
+
+	LocalVector<NavigationPoly> *navigation_polys = &maps_to_path_query_map_data[least_cost_map].query_slot->path_corridor;
 
 	_query_task_push_back_point_with_metadata(p_query_task, end_point, end_poly);
 
 	// Add mid points.
 	int np_id = least_cost_id;
-	while (np_id != -1 && navigation_polys[np_id].back_navigation_poly_id != -1) {
-		_query_task_push_back_point_with_metadata(p_query_task, navigation_polys[np_id].entry, navigation_polys[np_id].poly);
+	while (np_id != -1 && (*navigation_polys)[np_id].back_navigation_poly_id != -1) {
+		_query_task_push_back_point_with_metadata(p_query_task, (*navigation_polys)[np_id].entry, (*navigation_polys)[np_id].poly);
 
-		np_id = navigation_polys[np_id].back_navigation_poly_id;
+		least_cost_map = (*navigation_polys)[np_id].back_navigation_map;
+		np_id = (*navigation_polys)[np_id].back_navigation_poly_id;
+		navigation_polys = &maps_to_path_query_map_data[least_cost_map].query_slot->path_corridor;
 	}
 
 	_query_task_push_back_point_with_metadata(p_query_task, begin_point, begin_poly);
@@ -1107,9 +1223,8 @@ static bool _line_intersects_segment(const Vector2 &p_line_normal, real_t p_line
 	return true;
 }
 
-void NavMeshQueries2D::_query_task_clip_path(NavMeshPathQueryTask2D &p_query_task, const NavigationPoly *p_from_poly, const Vector2 &p_to_point, const NavigationPoly *p_to_poly) {
+void NavMeshQueries2D::_query_task_clip_path(NavMeshPathQueryTask2D &p_query_task, AHashMap<NavMap2D *, PathQueryMapData> &maps_to_path_query_map_data, const NavigationPoly *p_from_poly, const Vector2 &p_to_point, const NavigationPoly *p_to_poly) {
 	Vector2 from = p_query_task.path_points[p_query_task.path_points.size() - 1];
-	const LocalVector<NavigationPoly> &p_navigation_polys = p_query_task.path_query_slot->path_corridor;
 
 	if (from.is_equal_approx(p_to_point)) {
 		return;
@@ -1124,7 +1239,7 @@ void NavMeshQueries2D::_query_task_clip_path(NavMeshPathQueryTask2D &p_query_tas
 		Vector2 pathway_end = p_from_poly->back_navigation_edge_pathway_end;
 
 		ERR_FAIL_COND(p_from_poly->back_navigation_poly_id == -1);
-		p_from_poly = &p_navigation_polys[p_from_poly->back_navigation_poly_id];
+		p_from_poly = &maps_to_path_query_map_data[p_from_poly->back_navigation_map].query_slot->path_corridor[p_from_poly->back_navigation_poly_id];
 
 		if (!pathway_start.is_equal_approx(pathway_end)) {
 			Vector2 inters;

@@ -57,7 +57,7 @@ void NavigationServer2D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("map_get_edge_connection_margin", "map"), &NavigationServer2D::map_get_edge_connection_margin);
 	ClassDB::bind_method(D_METHOD("map_set_link_connection_radius", "map", "radius"), &NavigationServer2D::map_set_link_connection_radius);
 	ClassDB::bind_method(D_METHOD("map_get_link_connection_radius", "map"), &NavigationServer2D::map_get_link_connection_radius);
-	ClassDB::bind_method(D_METHOD("map_get_path", "map", "origin", "destination", "optimize", "navigation_layers"), &NavigationServer2D::map_get_path, DEFVAL(1));
+	ClassDB::bind_method(D_METHOD("map_get_path", "map", "origin", "destination", "optimize", "destination_map", "navigation_layers"), &NavigationServer2D::map_get_path, DEFVAL(RID()), DEFVAL(1));
 	ClassDB::bind_method(D_METHOD("map_get_closest_point", "map", "to_point"), &NavigationServer2D::map_get_closest_point);
 	ClassDB::bind_method(D_METHOD("map_get_closest_point_owner", "map", "to_point"), &NavigationServer2D::map_get_closest_point_owner);
 
@@ -108,10 +108,13 @@ void NavigationServer2D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("link_get_iteration_id", "link"), &NavigationServer2D::link_get_iteration_id);
 	ClassDB::bind_method(D_METHOD("link_set_map", "link", "map"), &NavigationServer2D::link_set_map);
 	ClassDB::bind_method(D_METHOD("link_get_map", "link"), &NavigationServer2D::link_get_map);
+	ClassDB::bind_method(D_METHOD("link_set_other_map", "link", "map"), &NavigationServer2D::link_set_other_map);
+	ClassDB::bind_method(D_METHOD("link_get_other_map", "link"), &NavigationServer2D::link_get_other_map);
 	ClassDB::bind_method(D_METHOD("link_set_enabled", "link", "enabled"), &NavigationServer2D::link_set_enabled);
 	ClassDB::bind_method(D_METHOD("link_get_enabled", "link"), &NavigationServer2D::link_get_enabled);
 	ClassDB::bind_method(D_METHOD("link_set_bidirectional", "link", "bidirectional"), &NavigationServer2D::link_set_bidirectional);
 	ClassDB::bind_method(D_METHOD("link_is_bidirectional", "link"), &NavigationServer2D::link_is_bidirectional);
+	ClassDB::bind_method(D_METHOD("link_is_cross_map", "link"), &NavigationServer2D::link_is_cross_map);
 	ClassDB::bind_method(D_METHOD("link_set_navigation_layers", "link", "navigation_layers"), &NavigationServer2D::link_set_navigation_layers);
 	ClassDB::bind_method(D_METHOD("link_get_navigation_layers", "link"), &NavigationServer2D::link_get_navigation_layers);
 	ClassDB::bind_method(D_METHOD("link_set_start_position", "link", "position"), &NavigationServer2D::link_set_start_position);

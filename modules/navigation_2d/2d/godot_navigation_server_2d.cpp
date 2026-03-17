@@ -285,6 +285,7 @@ RID GodotNavigationServer2D::map_create() {
 	RID rid = map_owner.make_rid();
 	NavMap2D *map = map_owner.get_or_null(rid);
 	map->set_self(rid);
+	map->set_owner(&map_owner);
 	return rid;
 }
 
@@ -408,8 +409,8 @@ real_t GodotNavigationServer2D::map_get_link_connection_radius(RID p_map) const 
 
 	return map->get_link_connection_radius();
 }
-
-Vector<Vector2> GodotNavigationServer2D::map_get_path(RID p_map, Vector2 p_origin, Vector2 p_destination, bool p_optimize, uint32_t p_navigation_layers) {
+\
+Vector<Vector2> GodotNavigationServer2D::map_get_path(RID p_map, Vector2 p_origin, Vector2 p_destination, bool p_optimize, RID p_destination_map, uint32_t p_navigation_layers) {
 	const NavMap2D *map = map_owner.get_or_null(p_map);
 	ERR_FAIL_NULL_V(map, Vector<Vector2>());
 
@@ -417,6 +418,7 @@ Vector<Vector2> GodotNavigationServer2D::map_get_path(RID p_map, Vector2 p_origi
 	query_parameters.instantiate();
 
 	query_parameters->set_map(p_map);
+	query_parameters->set_destination_map(p_destination_map);
 	query_parameters->set_start_position(p_origin);
 	query_parameters->set_target_position(p_destination);
 	query_parameters->set_navigation_layers(p_navigation_layers);
@@ -435,21 +437,21 @@ Vector<Vector2> GodotNavigationServer2D::map_get_path(RID p_map, Vector2 p_origi
 }
 
 Vector2 GodotNavigationServer2D::map_get_closest_point(RID p_map, const Vector2 &p_point) const {
-	const NavMap2D *map = map_owner.get_or_null(p_map);
+	NavMap2D *map = map_owner.get_or_null(p_map);
 	ERR_FAIL_NULL_V(map, Vector2());
 
 	return map->get_closest_point(p_point);
 }
 
 RID GodotNavigationServer2D::map_get_closest_point_owner(RID p_map, const Vector2 &p_point) const {
-	const NavMap2D *map = map_owner.get_or_null(p_map);
+	NavMap2D *map = map_owner.get_or_null(p_map);
 	ERR_FAIL_NULL_V(map, RID());
 
 	return map->get_closest_point_owner(p_point);
 }
 
 Vector2 GodotNavigationServer2D::map_get_random_point(RID p_map, uint32_t p_navigation_layers, bool p_uniformly) const {
-	const NavMap2D *map = map_owner.get_or_null(p_map);
+	NavMap2D *map = map_owner.get_or_null(p_map);
 	ERR_FAIL_NULL_V(map, Vector2());
 
 	return map->get_random_point(p_navigation_layers, p_uniformly);
@@ -697,6 +699,25 @@ RID GodotNavigationServer2D::link_get_map(const RID p_link) const {
 	return RID();
 }
 
+COMMAND_2(link_set_other_map, RID, p_link, RID, p_other_map) {
+	NavLink2D *link = link_owner.get_or_null(p_link);
+	ERR_FAIL_NULL(link);
+
+	NavMap2D *other_map = map_owner.get_or_null(p_other_map);
+
+	link->set_other_map(other_map);
+}
+
+RID GodotNavigationServer2D::link_get_other_map(const RID p_link) const {
+	const NavLink2D *link = link_owner.get_or_null(p_link);
+	ERR_FAIL_NULL_V(link, RID());
+
+	if (link->get_other_map()) {
+		return link->get_other_map()->get_self();
+	}
+	return RID();
+}
+
 COMMAND_2(link_set_enabled, RID, p_link, bool, p_enabled) {
 	NavLink2D *link = link_owner.get_or_null(p_link);
 	ERR_FAIL_NULL(link);
@@ -723,6 +744,13 @@ bool GodotNavigationServer2D::link_is_bidirectional(RID p_link) const {
 	ERR_FAIL_NULL_V(link, false);
 
 	return link->is_bidirectional();
+}
+
+bool GodotNavigationServer2D::link_is_cross_map(RID p_link) const {
+	const NavLink2D *link = link_owner.get_or_null(p_link);
+	ERR_FAIL_NULL_V(link, false);
+
+	return link->is_cross_map();
 }
 
 COMMAND_2(link_set_navigation_layers, RID, p_link, uint32_t, p_navigation_layers) {
@@ -1369,9 +1397,15 @@ void GodotNavigationServer2D::query_path(const Ref<NavigationPathQueryParameters
 	ERR_FAIL_COND(p_query_result.is_null());
 
 	NavMap2D *map = map_owner.get_or_null(p_query_parameters->get_map());
+	NavMap2D *destination_map = map_owner.get_or_null(p_query_parameters->get_destination_map());
+
+	if (destination_map == nullptr) {
+		destination_map = map;
+	}
+
 	ERR_FAIL_NULL(map);
 
-	NavMeshQueries2D::map_query_path(map, p_query_parameters, p_query_result, p_callback);
+	NavMeshQueries2D::map_query_path(map, destination_map, p_query_parameters, p_query_result, p_callback);
 }
 
 RID GodotNavigationServer2D::source_geometry_parser_create() {
