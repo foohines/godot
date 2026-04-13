@@ -706,6 +706,15 @@ RD::PipelineColorBlendState::Attachment MaterialStorage::ShaderData::blend_mode_
 			attachment.src_alpha_blend_factor = RD::BLEND_FACTOR_ONE;
 			attachment.dst_alpha_blend_factor = RD::BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
 		} break;
+		case BLEND_MODE_MAX: {
+			attachment.enable_blend = true;
+			attachment.alpha_blend_op = RD::BLEND_OP_MAXIMUM;
+			attachment.color_blend_op = RD::BLEND_OP_MAXIMUM;
+			attachment.src_color_blend_factor = RD::BLEND_FACTOR_ONE;
+			attachment.dst_color_blend_factor = RD::BLEND_FACTOR_ONE;
+			attachment.src_alpha_blend_factor = RD::BLEND_FACTOR_ONE;
+			attachment.dst_alpha_blend_factor = RD::BLEND_FACTOR_ONE;
+		} break;
 		case BLEND_MODE_DISABLED:
 		default: {
 			// Use default attachment values.
