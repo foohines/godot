@@ -32,6 +32,20 @@
 
 #include "servers/audio/audio_server.h"
 
+#ifndef NAVIGATION_2D_DISABLED
+#include "scene/resources/2d/capsule_shape_2d.h"
+#include "scene/resources/2d/circle_shape_2d.h"
+#include "scene/resources/2d/concave_polygon_shape_2d.h"
+#include "scene/resources/2d/convex_polygon_shape_2d.h"
+#include "scene/resources/2d/navigation_mesh_source_geometry_data_2d.h"
+#include "scene/resources/2d/navigation_polygon.h"
+#include "scene/resources/2d/rectangle_shape_2d.h"
+#include "servers/navigation_2d/navigation_server_2d.h"
+#endif // NAVIGATION_2D_DISABLED
+
+Callable Area2D::_navmesh_source_geometry_parsing_callback;
+RID Area2D::_navmesh_source_geometry_parser;
+
 void Area2D::set_gravity_space_override_mode(SpaceOverride p_mode) {
 	gravity_space_override = p_mode;
 	PhysicsServer2D::get_singleton()->area_set_param(get_rid(), PhysicsServer2D::AREA_PARAM_GRAVITY_OVERRIDE_MODE, p_mode);
@@ -579,6 +593,157 @@ void Area2D::_validate_property(PropertyInfo &p_property) const {
 		}
 	}
 }
+
+
+#ifndef NAVIGATION_2D_DISABLED
+void Area2D::navmesh_parse_init() {
+	ERR_FAIL_NULL(NavigationServer2D::get_singleton());
+	if (!_navmesh_source_geometry_parser.is_valid()) {
+		_navmesh_source_geometry_parsing_callback = callable_mp_static(&Area2D::navmesh_parse_source_geometry);
+		_navmesh_source_geometry_parser = NavigationServer2D::get_singleton()->source_geometry_parser_create();
+		NavigationServer2D::get_singleton()->source_geometry_parser_set_callback(_navmesh_source_geometry_parser, _navmesh_source_geometry_parsing_callback);
+	}
+}
+
+void Area2D::navmesh_parse_source_geometry(const Ref<NavigationPolygon> &p_navigation_mesh, Ref<NavigationMeshSourceGeometryData2D> p_source_geometry_data, Node *p_node) {
+	Area2D *area = Object::cast_to<Area2D>(p_node);
+
+	if (area == nullptr) {
+		return;
+	}
+
+	NavigationPolygon::NavigationGeometryType navigation_geometry_type = p_navigation_mesh->get_navigation_geometry_type();
+	NavigationPolygon::ParsedGeometryType parsed_geometry_type = p_navigation_mesh->get_parsed_geometry_type();
+
+	if (!(parsed_geometry_type == NavigationPolygon::PARSED_GEOMETRY_STATIC_COLLIDERS || parsed_geometry_type == NavigationPolygon::PARSED_GEOMETRY_BOTH)) {
+		return;
+	}
+
+	uint32_t parsed_collision_mask = p_navigation_mesh->get_parsed_collision_mask();
+	if (!(area->get_collision_layer() & parsed_collision_mask)) {
+		return;
+	}
+
+	List<uint32_t> shape_owners;
+	area->get_shape_owners(&shape_owners);
+
+	for (uint32_t shape_owner : shape_owners) {
+		if (area->is_shape_owner_disabled(shape_owner)) {
+			continue;
+		}
+
+		const int shape_count = area->shape_owner_get_shape_count(shape_owner);
+
+		for (int shape_index = 0; shape_index < shape_count; shape_index++) {
+			Ref<Shape2D> s = area->shape_owner_get_shape(shape_owner, shape_index);
+
+			if (s.is_null()) {
+				continue;
+			}
+
+			const Transform2D area_xform = p_source_geometry_data->root_node_transform * area->get_global_transform() * area->shape_owner_get_transform(shape_owner);
+
+			RectangleShape2D *rectangle_shape = Object::cast_to<RectangleShape2D>(*s);
+			if (rectangle_shape) {
+				Vector<Vector2> shape_outline;
+
+				const Vector2 &rectangle_size = rectangle_shape->get_size();
+
+				shape_outline.resize(5);
+				shape_outline.write[0] = area_xform.xform(-rectangle_size * 0.5);
+				shape_outline.write[1] = area_xform.xform(Vector2(rectangle_size.x, -rectangle_size.y) * 0.5);
+				shape_outline.write[2] = area_xform.xform(rectangle_size * 0.5);
+				shape_outline.write[3] = area_xform.xform(Vector2(-rectangle_size.x, rectangle_size.y) * 0.5);
+				shape_outline.write[4] = area_xform.xform(-rectangle_size * 0.5);
+
+				
+				if (navigation_geometry_type == NavigationPolygon::NAVIGATION_GEOMETRY_OBSTRUCTION) {
+					p_source_geometry_data->add_obstruction_outline(shape_outline);
+				} else {
+					p_source_geometry_data->add_traversable_outline(shape_outline);
+				}
+			}
+
+			CapsuleShape2D *capsule_shape = Object::cast_to<CapsuleShape2D>(*s);
+			if (capsule_shape) {
+				const real_t capsule_height = capsule_shape->get_height();
+				const real_t capsule_radius = capsule_shape->get_radius();
+
+				Vector<Vector2> shape_outline;
+				const real_t turn_step = Math::TAU / 12.0;
+				shape_outline.resize(14);
+				int shape_outline_inx = 0;
+				for (int i = 0; i < 12; i++) {
+					Vector2 ofs = Vector2(0, (i > 3 && i <= 9) ? capsule_height * 0.5 - capsule_radius : -capsule_height * 0.5 + capsule_radius);
+
+					shape_outline.write[shape_outline_inx] = area_xform.xform(Vector2(Math::sin(i * turn_step), -Math::cos(i * turn_step)) * capsule_radius + ofs);
+					shape_outline_inx += 1;
+					if (i == 3 || i == 9) {
+						shape_outline.write[shape_outline_inx] = area_xform.xform(Vector2(Math::sin(i * turn_step), -Math::cos(i * turn_step)) * capsule_radius - ofs);
+						shape_outline_inx += 1;
+					}
+				}
+
+				if (navigation_geometry_type == NavigationPolygon::NAVIGATION_GEOMETRY_OBSTRUCTION) {
+					p_source_geometry_data->add_obstruction_outline(shape_outline);
+				} else {
+					p_source_geometry_data->add_traversable_outline(shape_outline);
+				}
+			}
+
+			CircleShape2D *circle_shape = Object::cast_to<CircleShape2D>(*s);
+			if (circle_shape) {
+				const real_t circle_radius = circle_shape->get_radius();
+
+				Vector<Vector2> shape_outline;
+				int circle_edge_count = 12;
+				shape_outline.resize(circle_edge_count);
+
+				const real_t turn_step = Math::TAU / real_t(circle_edge_count);
+				for (int i = 0; i < circle_edge_count; i++) {
+					shape_outline.write[i] = area_xform.xform(Vector2(Math::cos(i * turn_step), Math::sin(i * turn_step)) * circle_radius);
+				}
+
+				if (navigation_geometry_type == NavigationPolygon::NAVIGATION_GEOMETRY_OBSTRUCTION) {
+					p_source_geometry_data->add_obstruction_outline(shape_outline);
+				} else {
+					p_source_geometry_data->add_traversable_outline(shape_outline);
+				}
+			}
+
+			ConcavePolygonShape2D *concave_polygon_shape = Object::cast_to<ConcavePolygonShape2D>(*s);
+			if (concave_polygon_shape) {
+				Vector<Vector2> shape_outline = concave_polygon_shape->get_segments();
+
+				for (int i = 0; i < shape_outline.size(); i++) {
+					shape_outline.write[i] = area_xform.xform(shape_outline[i]);
+				}
+
+				if (navigation_geometry_type == NavigationPolygon::NAVIGATION_GEOMETRY_OBSTRUCTION) {
+					p_source_geometry_data->add_obstruction_outline(shape_outline);
+				} else {
+					p_source_geometry_data->add_traversable_outline(shape_outline);
+				}
+			}
+
+			ConvexPolygonShape2D *convex_polygon_shape = Object::cast_to<ConvexPolygonShape2D>(*s);
+			if (convex_polygon_shape) {
+				Vector<Vector2> shape_outline = convex_polygon_shape->get_points();
+
+				for (int i = 0; i < shape_outline.size(); i++) {
+					shape_outline.write[i] = area_xform.xform(shape_outline[i]);
+				}
+
+				if (navigation_geometry_type == NavigationPolygon::NAVIGATION_GEOMETRY_OBSTRUCTION) {
+					p_source_geometry_data->add_obstruction_outline(shape_outline);
+				} else {
+					p_source_geometry_data->add_traversable_outline(shape_outline);
+				}
+			}
+		}
+	}
+}
+#endif // NAVIGATION_2D_DISABLED
 
 void Area2D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_gravity_space_override_mode", "space_override_mode"), &Area2D::set_gravity_space_override_mode);

@@ -33,6 +33,9 @@
 #include "core/templates/vset.h"
 #include "scene/2d/physics/collision_object_2d.h"
 
+class NavigationPolygon;
+class NavigationMeshSourceGeometryData2D;
+
 class Area2D : public CollisionObject2D {
 	GDCLASS(Area2D, CollisionObject2D);
 
@@ -193,6 +196,16 @@ public:
 
 	void set_audio_bus_name(const StringName &p_audio_bus);
 	StringName get_audio_bus_name() const;
+
+private:
+	static Callable _navmesh_source_geometry_parsing_callback;
+	static RID _navmesh_source_geometry_parser;
+
+#ifndef NAVIGATION_2D_DISABLED
+public:
+	static void navmesh_parse_init();
+	static void navmesh_parse_source_geometry(const Ref<NavigationPolygon> &p_navigation_mesh, Ref<NavigationMeshSourceGeometryData2D> p_source_geometry_data, Node *p_node);
+#endif // NAVIGATION_2D_DISABLED
 
 	Area2D();
 	~Area2D();
