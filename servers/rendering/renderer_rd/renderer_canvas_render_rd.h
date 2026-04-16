@@ -36,6 +36,7 @@
 #include "servers/rendering/renderer_rd/pipeline_hash_map_rd.h"
 #include "servers/rendering/renderer_rd/shaders/canvas.glsl.gen.h"
 #include "servers/rendering/renderer_rd/shaders/canvas_occlusion.glsl.gen.h"
+#include "servers/rendering/renderer_rd/shaders/canvas_height_prepass.glsl.gen.h"
 #include "servers/rendering/renderer_rd/storage_rd/material_storage.h"
 #include "servers/rendering/rendering_device.h"
 #include "servers/rendering/shader_compiler.h"
@@ -346,6 +347,14 @@ class RendererCanvasRenderRD : public RendererCanvasRender {
 		RD::FramebufferFormatID sdf_framebuffer_format;
 	} shadow_render;
 
+	struct {
+		CanvasHeightPrepassShaderRD shader; // needs a generated shader class like CanvasOcclusionShaderRD
+		RID shader_version;
+		RID pipeline_quad;
+		RID pipeline_attributes;
+		RD::FramebufferFormatID framebuffer_format;
+	} height_prepass;
+
 	/***************/
 	/**** STATE ****/
 	/***************/
@@ -469,6 +478,7 @@ class RendererCanvasRenderRD : public RendererCanvasRender {
 		RID normal;
 		RID specular;
 		RID sampler;
+		RID heightmap;
 		Vector2 texpixel_size;
 		uint32_t specular_shininess = 0;
 		uint32_t flags = 0;
@@ -632,6 +642,10 @@ class RendererCanvasRenderRD : public RendererCanvasRender {
 		RID shadow_depth_texture;
 		RID shadow_fb;
 		int shadow_texture_size = 2048;
+		RID height_buffer;
+		RID height_framebuffer;
+		RID height_fb_uniform_set;
+		RID height_sampler;
 
 		RID shadow_occluder_buffer;
 		uint32_t shadow_occluder_buffer_size;
