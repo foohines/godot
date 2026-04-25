@@ -176,6 +176,7 @@ layout(set = 0, binding = 5) uniform sampler shadow_sampler;
 
 layout(set = 0, binding = 6) uniform texture2D color_buffer;
 layout(set = 0, binding = 7) uniform texture2D sdf_texture;
+layout(set = 0, binding = 10) uniform texture2D height_buffer;
 
 #include "samplers_inc.glsl"
 

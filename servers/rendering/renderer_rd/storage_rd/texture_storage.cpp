@@ -3518,6 +3518,9 @@ void TextureStorage::_clear_render_target(RenderTarget *rt) {
 	if (rt->framebuffer_uniform_set.is_valid()) {
 		rt->framebuffer_uniform_set = RID(); //chain deleted
 	}
+	if (rt->framebuffer_height_uniform_set.is_valid()) {
+		rt->framebuffer_height_uniform_set = RID();
+	}
 
 	if (rt->color.is_valid()) {
 		RD::get_singleton()->free_rid(rt->color);
@@ -3533,6 +3536,9 @@ void TextureStorage::_clear_render_target(RenderTarget *rt) {
 		rt->backbuffer = RID();
 		rt->backbuffer_mipmaps.clear();
 		rt->backbuffer_uniform_set = RID(); //chain deleted
+		if (rt->backbuffer_height_uniform_set.is_valid()) {
+			rt->backbuffer_height_uniform_set = RID();
+		}
 	}
 
 	_render_target_clear_sdf(rt);
@@ -3691,6 +3697,13 @@ void TextureStorage::_create_render_target_backbuffer(RenderTarget *rt) {
 		RD::get_singleton()->free_rid(rt->framebuffer_uniform_set);
 		rt->framebuffer_uniform_set = RID();
 	}
+
+	if (rt->framebuffer_height_uniform_set.is_valid() && RD::get_singleton()->uniform_set_is_valid(rt->framebuffer_height_uniform_set)) {
+		//the new one will (probably not) require the backbuffer.
+		RD::get_singleton()->free_rid(rt->framebuffer_height_uniform_set);
+		rt->framebuffer_height_uniform_set = RID();
+	}
+
 	//create mipmaps
 	for (uint32_t i = 1; i < mipmaps_required; i++) {
 		RID mipmap = RD::get_singleton()->texture_create_shared_from_slice(RD::TextureView(), rt->backbuffer, 0, i);
@@ -4473,27 +4486,37 @@ void TextureStorage::render_target_gen_back_buffer_mipmaps(RID p_render_target, 
 	RD::get_singleton()->draw_command_end_label();
 }
 
-RID TextureStorage::render_target_get_framebuffer_uniform_set(RID p_render_target) {
+RID TextureStorage::render_target_get_framebuffer_uniform_set(RID p_render_target, bool p_height_prepass) {
 	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
 	ERR_FAIL_NULL_V(rt, RID());
-	return rt->framebuffer_uniform_set;
+	return p_height_prepass ? rt->framebuffer_height_uniform_set : rt->framebuffer_uniform_set;
 }
-RID TextureStorage::render_target_get_backbuffer_uniform_set(RID p_render_target) {
+RID TextureStorage::render_target_get_backbuffer_uniform_set(RID p_render_target, bool p_height_prepass) {
 	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
 	ERR_FAIL_NULL_V(rt, RID());
-	return rt->backbuffer_uniform_set;
+	return p_height_prepass ? rt->backbuffer_height_uniform_set : rt->backbuffer_uniform_set;
 }
 
-void TextureStorage::render_target_set_framebuffer_uniform_set(RID p_render_target, RID p_uniform_set) {
+void TextureStorage::render_target_set_framebuffer_uniform_set(RID p_render_target, RID p_uniform_set, bool p_height_prepass) {
 	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
 	ERR_FAIL_NULL(rt);
-	rt->framebuffer_uniform_set = p_uniform_set;
+
+	if (p_height_prepass) {
+		rt->framebuffer_height_uniform_set = p_uniform_set;
+	} else {
+		rt->framebuffer_uniform_set = p_uniform_set;
+	}
 }
 
-void TextureStorage::render_target_set_backbuffer_uniform_set(RID p_render_target, RID p_uniform_set) {
+void TextureStorage::render_target_set_backbuffer_uniform_set(RID p_render_target, RID p_uniform_set, bool p_height_prepass) {
 	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
 	ERR_FAIL_NULL(rt);
-	rt->backbuffer_uniform_set = p_uniform_set;
+
+	if (p_height_prepass) {
+		rt->backbuffer_height_uniform_set = p_uniform_set;
+	} else {
+		rt->backbuffer_uniform_set = p_uniform_set;
+	}
 }
 
 void TextureStorage::render_target_set_vrs_mode(RID p_render_target, RS::ViewportVRSMode p_mode) {

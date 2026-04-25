@@ -204,6 +204,7 @@ public:
 			float px_range;
 
 			RID texture;
+			RID height_texture;
 
 			CommandRect() {
 				flags = 0;

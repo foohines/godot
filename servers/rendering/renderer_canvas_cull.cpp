@@ -1621,7 +1621,7 @@ void RendererCanvasCull::canvas_item_add_lcd_texture_rect_region(RID p_item, con
 	}
 }
 
-void RendererCanvasCull::canvas_item_add_texture_rect_region(RID p_item, const Rect2 &p_rect, RID p_texture, const Rect2 &p_src_rect, const Color &p_modulate, bool p_transpose, bool p_clip_uv) {
+void RendererCanvasCull::canvas_item_add_texture_rect_region(RID p_item, const Rect2 &p_rect, RID p_texture, const Rect2 &p_src_rect, const Color &p_modulate, bool p_transpose, bool p_clip_uv, RID p_height_texture) {
 	Item *canvas_item = canvas_item_owner.get_or_null(p_item);
 	ERR_FAIL_NULL(canvas_item);
 
@@ -1631,6 +1631,7 @@ void RendererCanvasCull::canvas_item_add_texture_rect_region(RID p_item, const R
 	rect->rect = p_rect;
 
 	rect->texture = p_texture;
+	rect->height_texture = p_height_texture;
 
 	rect->source = p_src_rect;
 	rect->flags = RendererCanvasRender::CANVAS_RECT_REGION;

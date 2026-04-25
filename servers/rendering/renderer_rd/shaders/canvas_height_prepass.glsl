@@ -8,12 +8,12 @@
 
 layout(location = 8) in vec4 world_matrix_ab;  // xy=world_x, zw=world_y
 layout(location = 9) in vec4 world_matrix_c;   // xy=world_ofs
-layout(location = 10) in vec4 modulation;       // r=base_height, g=layer_index
+layout(location = 10) in vec4 modulation;       // r=base_height
 layout(location = 12) in vec4 dst_rect;
 layout(location = 13) in vec4 src_rect;
 
 layout(location = 0) out vec2 uv_interp;
-layout(location = 1) out flat vec4 modulation_interp;
+layout(location = 1) out flat float base_height_interp;
 
 void main() {
     vec2 vertex_base_arr[4] = vec2[](
@@ -39,7 +39,7 @@ void main() {
     vertex = (canvas_data.canvas_transform * vec4(vertex, 0.0, 1.0)).xy;
 
     uv_interp = uv;
-    modulation_interp = modulation;
+    base_height_interp = 1.0 - modulation.r;
 
     gl_Position = canvas_data.screen_transform * vec4(vertex, 0.0, 1.0);
 }
@@ -53,31 +53,20 @@ void main() {
 #include "canvas_uniforms_inc.glsl"
 
 layout(location = 0) in vec2 uv_interp;
-layout(location = 1) in flat vec4 modulation_interp;
+layout(location = 1) in flat float base_height_interp;
 
-// SET3 — same batch texture uniform set as color pass
-layout(set = 3, binding = 0) uniform texture2D color_texture;
-layout(set = 3, binding = 3) uniform sampler texture_sampler;
-
-// SET0 — height texture array alongside other global uniforms
-layout(set = 0, binding = 11) uniform sampler2DArray height_texture_array;
-
-layout(location = 0) out float height_out;
+layout(location = 0) out vec4 height_out;
 
 void main() {
     float alpha = texture(sampler2D(color_texture, texture_sampler), uv_interp).a;
-    if (alpha < 0.1) {
+    float local_height = texture(sampler2D(height_texture, texture_sampler), uv_interp).r;
+    
+    
+    if (alpha < 0.9) {
         discard;
     }
 
-    float base_height = modulation_interp.r * 1000.0; // scale to world units
-    float layer = modulation_interp.g * 255.0;
-
-    if (layer < 0.0) {
-        discard; // sentinel — not a height participant
-    }
-
-    float local_height = texture(height_texture_array, vec3(uv_interp, layer)).r * 255.0;
-
-    height_out = base_height + local_height;
+    // height_out = vec4(uv_interp.x, uv_interp.y, 0.0, 1.0);
+    height_out = vec4(local_height + base_height_interp, 0.0, 0.0, 1.0);
+    // height_out = vec4(0.0, uv_interp.x, uv_interp.y, 1.0);
 }

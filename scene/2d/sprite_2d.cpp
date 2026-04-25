@@ -166,7 +166,7 @@ void Sprite2D::_notification(int p_what) {
 			bool filter_clip_enabled;
 			_get_rects(src_rect, dst_rect, filter_clip_enabled);
 
-			texture->draw_rect_region(ci, dst_rect, src_rect, Color(1, 1, 1), false, filter_clip_enabled);
+			texture->draw_rect_region(ci, dst_rect, src_rect, Color(1, 1, 1), false, filter_clip_enabled, height_texture.is_valid() ? height_texture->get_rid() : RID());
 		} break;
 	}
 }
@@ -193,6 +193,19 @@ void Sprite2D::set_texture(const Ref<Texture2D> &p_texture) {
 
 Ref<Texture2D> Sprite2D::get_texture() const {
 	return texture;
+}
+
+void Sprite2D::set_height_texture(const Ref<Texture2D> &p_texture) {
+	if (p_texture == height_texture) {
+		return;
+	}
+	height_texture = p_texture;
+	queue_redraw();
+	item_rect_changed(); // needed?
+}
+
+Ref<Texture2D> Sprite2D::get_height_texture() const {
+	return height_texture;
 }
 
 void Sprite2D::set_centered(bool p_center) {
@@ -493,6 +506,9 @@ void Sprite2D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_texture", "texture"), &Sprite2D::set_texture);
 	ClassDB::bind_method(D_METHOD("get_texture"), &Sprite2D::get_texture);
 
+	ClassDB::bind_method(D_METHOD("set_height_texture", "height_texture"), &Sprite2D::set_height_texture);
+	ClassDB::bind_method(D_METHOD("get_height_texture"), &Sprite2D::get_height_texture);
+
 	ClassDB::bind_method(D_METHOD("set_centered", "centered"), &Sprite2D::set_centered);
 	ClassDB::bind_method(D_METHOD("is_centered"), &Sprite2D::is_centered);
 
@@ -534,6 +550,7 @@ void Sprite2D::_bind_methods() {
 	ADD_SIGNAL(MethodInfo("texture_changed"));
 
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "texture", PROPERTY_HINT_RESOURCE_TYPE, "Texture2D"), "set_texture", "get_texture");
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "height_texture", PROPERTY_HINT_RESOURCE_TYPE, "Texture2D"), "set_height_texture", "get_height_texture");
 	ADD_GROUP("Offset", "");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "centered"), "set_centered", "is_centered");
 	ADD_PROPERTY(PropertyInfo(Variant::VECTOR2, "offset", PROPERTY_HINT_NONE, "suffix:px"), "set_offset", "get_offset");
