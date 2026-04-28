@@ -1808,6 +1808,7 @@ RendererCanvasRenderRD::RendererCanvasRenderRD() {
 		actions.renames["TEXTURE"] = "color_texture";
 		actions.renames["HEIGHT_TEXTURE"] = "height_texture";
 		actions.renames["HEIGHT_BUFFER"] = "height_buffer";
+		actions.renames["BASE_HEIGHT"] = "base_height_interp";
 		actions.renames["TEXTURE_PIXEL_SIZE"] = "read_draw_data_color_texture_pixel_size";
 		actions.renames["NORMAL_TEXTURE"] = "normal_texture";
 		actions.renames["SPECULAR_SHININESS_TEXTURE"] = "specular_texture";
@@ -1861,7 +1862,7 @@ RendererCanvasRenderRD::RendererCanvasRenderRD() {
 		actions.base_uniform_string = "material.";
 		actions.default_filter = ShaderLanguage::FILTER_LINEAR;
 		actions.default_repeat = ShaderLanguage::REPEAT_DISABLE;
-		actions.base_varying_index = 9;
+		actions.base_varying_index = 10;
 
 		actions.global_buffer_array_variable = "global_shader_uniforms.data";
 		actions.instance_uniform_index_variable = "read_draw_data_instance_offset";
@@ -1948,7 +1949,7 @@ RendererCanvasRenderRD::RendererCanvasRenderRD() {
 		tf.texture_type = RD::TEXTURE_TYPE_2D;
 		tf.width = 1;
 		tf.height = 1;
-		tf.format = RD::DATA_FORMAT_R8G8B8A8_UNORM;
+		tf.format = RD::DATA_FORMAT_R16G16_SFLOAT;
 		tf.usage_bits = RD::TEXTURE_USAGE_COLOR_ATTACHMENT_BIT | RD::TEXTURE_USAGE_SAMPLING_BIT;
 		state.height_buffer = RD::get_singleton()->texture_create(tf, RD::TextureView());
 
@@ -2058,7 +2059,7 @@ RendererCanvasRenderRD::RendererCanvasRenderRD() {
 
 		Vector<RD::AttachmentFormat> attachments;
 		RD::AttachmentFormat af;
-		af.format = RD::DATA_FORMAT_R8G8B8A8_UNORM;
+		af.format = RD::DATA_FORMAT_R16G16_SFLOAT;
 		af.usage_flags = RD::TEXTURE_USAGE_COLOR_ATTACHMENT_BIT | RD::TEXTURE_USAGE_SAMPLING_BIT;
 		attachments.push_back(af);
 		height_prepass.framebuffer_format =
@@ -2349,11 +2350,7 @@ void RendererCanvasRenderRD::_render_batch_items(RenderTarget p_to_render_target
 			texture_storage->render_target_disable_clear_request(p_to_render_target.render_target);
 		}
 		// TODO: Obtain from framebuffer format eventually when this is implemented.
-		
 	}
-
-	
-	
 
 	RD::FramebufferFormatID fb_format = RD::get_singleton()->framebuffer_get_format(framebuffer);
 
@@ -2496,12 +2493,18 @@ void RendererCanvasRenderRD::_record_item_commands(const Item *p_item, RenderTar
 	}
 
 	bool use_lighting = (light_count > 0 || using_directional_lights);
-
 	if (use_lighting != r_current_batch->use_lighting) {
 		r_current_batch = _new_batch(r_batch_broken);
 		r_current_batch->use_lighting = use_lighting;
 	}
-
+	
+	// height occlusion
+	bool use_height_occlusion = p_item->height_occlusion_enabled;
+	if (use_height_occlusion != r_current_batch->use_height_occlusion) {
+		r_current_batch = _new_batch(r_batch_broken);
+		r_current_batch->use_height_occlusion = use_height_occlusion;
+	}
+	
 	const Item::Command *c = p_item->commands;
 	while (c) {
 		if (skipping && c->type != Item::Command::TYPE_ANIMATION_SLICE) {
@@ -2633,6 +2636,8 @@ void RendererCanvasRenderRD::_record_item_commands(const Item *p_item, RenderTar
 				instance_data->dst_rect[1] = dst_rect.position.y;
 				instance_data->dst_rect[2] = dst_rect.size.width;
 				instance_data->dst_rect[3] = dst_rect.size.height;
+
+				instance_data->base_height = rect->base_height;
 
 				_add_to_batch(r_batch_broken, r_current_batch);
 			} break;
@@ -3309,6 +3314,10 @@ void RendererCanvasRenderRD::_render_batch_height(RD::DrawListID p_draw_list, Ba
 		return;
 	}
 
+	if (!p_batch->use_height_occlusion) {
+		return;
+	}
+
 	// Bind batch texture uniform set
 	{
 		RIDSetKey key(p_batch->tex_info->state);
@@ -3390,7 +3399,7 @@ void RendererCanvasRenderRD::_resize_height_buffer(RenderTarget p_to_render_targ
 		tf.texture_type = RD::TEXTURE_TYPE_2D;
 		tf.width = ssize.width;
 		tf.height = ssize.height;
-		tf.format = RD::DATA_FORMAT_R8G8B8A8_UNORM;
+		tf.format = RD::DATA_FORMAT_R16G16_SFLOAT;
 		tf.usage_bits = RD::TEXTURE_USAGE_COLOR_ATTACHMENT_BIT | RD::TEXTURE_USAGE_SAMPLING_BIT;
 		state.height_buffer = RD::get_singleton()->texture_create(tf, RD::TextureView());
 

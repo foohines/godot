@@ -348,10 +348,9 @@ class RendererCanvasRenderRD : public RendererCanvasRender {
 	} shadow_render;
 
 	struct {
-		CanvasHeightPrepassShaderRD shader; // needs a generated shader class like CanvasOcclusionShaderRD
+		CanvasHeightPrepassShaderRD shader;
 		RID shader_version;
 		RID pipeline_quad;
-		RID pipeline_attributes;
 		RD::FramebufferFormatID framebuffer_format;
 	} height_prepass;
 
@@ -371,7 +370,8 @@ class RendererCanvasRenderRD : public RendererCanvasRender {
 				float ninepatch_margins[4];
 				float dst_rect[4];
 				float src_rect[4];
-				float pad[2];
+				float base_height;
+				float pad0;
 			};
 			//primitive
 			struct {
@@ -551,6 +551,7 @@ class RendererCanvasRenderRD : public RendererCanvasRender {
 		bool use_msdf = false;
 		bool use_lcd = false;
 		bool has_blend = false;
+		bool use_height_occlusion = false;
 
 		// batch-specific data
 		union {

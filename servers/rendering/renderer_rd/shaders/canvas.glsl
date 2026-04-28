@@ -41,6 +41,11 @@ layout(location = 8) out vec2 pixel_size_interp;
 #endif // USE_NINEPATCH
 #endif // !USE_ATTRIBUTES
 
+#if !defined(USE_PRIMITIVE) && !defined(USE_ATTRIBUTES) && !defined(USE_NINEPATCH)
+layout(location = 9) out flat float base_height_interp;
+#endif 
+
+
 #define read_draw_data_color_texture_pixel_size params.color_texture_pixel_size
 
 #ifdef USE_ATTRIBUTES
@@ -104,6 +109,13 @@ layout(location = 15) in uvec4 attrib_H;
 
 #endif // USE_ATTRIBUTES
 
+#if !defined(USE_PRIMITIVE) && !defined(USE_ATTRIBUTES) && !defined(USE_NINEPATCH)
+
+// base height
+#define read_draw_data_base_height uintBitsToFloat(attrib_G.x)
+
+#endif // quad path
+
 #ifdef MATERIAL_UNIFORMS_USED
 /* clang-format off */
 layout(set = 1, binding = 0, std140) uniform MaterialUniforms {
@@ -135,6 +147,10 @@ void main() {
 	varying_F = read_draw_data_src_rect;
 #endif // USE_NINEPATCH
 #endif // !USE_ATTRIBUTES
+
+#if !defined(USE_PRIMITIVE) && !defined(USE_ATTRIBUTES) && !defined(USE_NINEPATCH)
+	base_height_interp = read_draw_data_base_height;
+#endif // quad path
 
 	vec4 instance_custom = vec4(0.0);
 #if defined(CUSTOM0_USED)
@@ -351,7 +367,13 @@ layout(location = 8) in vec2 pixel_size_interp;
 
 #endif // USE_NINEPATCH
 
+
 #endif // USE_ATTRIBUTES
+
+
+#if !defined(USE_PRIMITIVE) && !defined(USE_ATTRIBUTES) && !defined(USE_NINEPATCH)
+layout(location = 9) in flat float base_height_interp;
+#endif // quad path
 
 layout(location = 0) out vec4 frag_color;
 
@@ -696,6 +718,10 @@ void main() {
 #if defined(NORMAL_MAP_USED)
 		vec3 normal_map = vec3(0.0, 0.0, 1.0);
 		normal_used = true;
+#endif
+
+#if defined(USE_PRIMITIVE) || defined(USE_ATTRIBUTES) || defined(USE_NINEPATCH)
+		float base_height_interp = 0.0;
 #endif
 
 #CODE : FRAGMENT

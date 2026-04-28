@@ -1456,6 +1456,9 @@ void CanvasItem::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_visibility_layer_bit", "layer", "enabled"), &CanvasItem::set_visibility_layer_bit);
 	ClassDB::bind_method(D_METHOD("get_visibility_layer_bit", "layer"), &CanvasItem::get_visibility_layer_bit);
 
+	ClassDB::bind_method(D_METHOD("set_height_occlusion_enabled", "enabled"), &CanvasItem::set_height_occlusion_enabled);
+	ClassDB::bind_method(D_METHOD("is_height_occlusion_enabled"), &CanvasItem::is_height_occlusion_enabled);
+
 	ClassDB::bind_method(D_METHOD("set_texture_filter", "mode"), &CanvasItem::set_texture_filter);
 	ClassDB::bind_method(D_METHOD("get_texture_filter"), &CanvasItem::get_texture_filter);
 
@@ -1476,11 +1479,12 @@ void CanvasItem::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "clip_children", PROPERTY_HINT_ENUM, "Disabled,Clip Only,Clip + Draw"), "set_clip_children_mode", "get_clip_children_mode");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "light_mask", PROPERTY_HINT_LAYERS_2D_RENDER), "set_light_mask", "get_light_mask");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "visibility_layer", PROPERTY_HINT_LAYERS_2D_RENDER), "set_visibility_layer", "get_visibility_layer");
-
+	
 	ADD_GROUP("Ordering", "");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "z_index", PROPERTY_HINT_RANGE, itos(RS::CANVAS_ITEM_Z_MIN) + "," + itos(RS::CANVAS_ITEM_Z_MAX) + ",1"), "set_z_index", "get_z_index");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "z_as_relative"), "set_z_as_relative", "is_z_relative");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "y_sort_enabled"), "set_y_sort_enabled", "is_y_sort_enabled");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "height_occlusion_enabled"), "set_height_occlusion_enabled", "is_height_occlusion_enabled");
 
 	ADD_GROUP("Texture", "texture_");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "texture_filter", PROPERTY_HINT_ENUM, "Inherit,Nearest,Linear,Nearest Mipmap,Linear Mipmap,Nearest Mipmap Anisotropic,Linear Mipmap Anisotropic"), "set_texture_filter", "get_texture_filter");
@@ -1620,6 +1624,15 @@ bool CanvasItem::get_visibility_layer_bit(uint32_t p_visibility_layer) const {
 	ERR_READ_THREAD_GUARD_V(false);
 	ERR_FAIL_UNSIGNED_INDEX_V(p_visibility_layer, 32, false);
 	return (visibility_layer & (1 << p_visibility_layer));
+}
+
+void CanvasItem::set_height_occlusion_enabled(bool p_enabled) {
+	height_occlusion_enabled = p_enabled;
+	RenderingServer::get_singleton()->canvas_item_set_height_occlusion_enabled(canvas_item, p_enabled);
+}
+
+bool CanvasItem::is_height_occlusion_enabled() const {
+	return height_occlusion_enabled;
 }
 
 void CanvasItem::_refresh_texture_filter_cache() const {

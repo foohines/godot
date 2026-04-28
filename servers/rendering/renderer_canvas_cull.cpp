@@ -717,6 +717,13 @@ void RendererCanvasCull::canvas_item_set_use_identity_transform(RID p_item, bool
 	canvas_item->use_identity_transform = p_enable;
 }
 
+void RendererCanvasCull::canvas_item_set_height_occlusion_enabled(RID p_item, bool p_enabled) {
+	Item *canvas_item = canvas_item_owner.get_or_null(p_item);
+	ERR_FAIL_NULL(canvas_item);
+
+	canvas_item->height_occlusion_enabled = p_enabled;
+}
+
 void RendererCanvasCull::canvas_item_set_update_when_visible(RID p_item, bool p_update) {
 	Item *canvas_item = canvas_item_owner.get_or_null(p_item);
 	ERR_FAIL_NULL(canvas_item);
@@ -1621,7 +1628,7 @@ void RendererCanvasCull::canvas_item_add_lcd_texture_rect_region(RID p_item, con
 	}
 }
 
-void RendererCanvasCull::canvas_item_add_texture_rect_region(RID p_item, const Rect2 &p_rect, RID p_texture, const Rect2 &p_src_rect, const Color &p_modulate, bool p_transpose, bool p_clip_uv, RID p_height_texture) {
+void RendererCanvasCull::canvas_item_add_texture_rect_region(RID p_item, const Rect2 &p_rect, RID p_texture, const Rect2 &p_src_rect, const Color &p_modulate, bool p_transpose, bool p_clip_uv, RID p_height_texture, float p_base_height) {
 	Item *canvas_item = canvas_item_owner.get_or_null(p_item);
 	ERR_FAIL_NULL(canvas_item);
 
@@ -1632,6 +1639,7 @@ void RendererCanvasCull::canvas_item_add_texture_rect_region(RID p_item, const R
 
 	rect->texture = p_texture;
 	rect->height_texture = p_height_texture;
+	rect->base_height = p_base_height;
 
 	rect->source = p_src_rect;
 	rect->flags = RendererCanvasRender::CANVAS_RECT_REGION;
