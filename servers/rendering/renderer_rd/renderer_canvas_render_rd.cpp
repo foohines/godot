@@ -375,7 +375,7 @@ _FORCE_INLINE_ static uint32_t _indices_to_primitives(RS::PrimitiveType p_primit
 	return (p_indices - subtractor[p_primitive]) / divisor[p_primitive];
 }
 
-RID RendererCanvasRenderRD::_create_base_uniform_set(RID p_to_render_target, bool p_backbuffer) {
+RID RendererCanvasRenderRD::_create_base_uniform_set(RID p_to_render_target, bool p_backbuffer, bool p_height_prepass) {
 	RendererRD::TextureStorage *texture_storage = RendererRD::TextureStorage::get_singleton();
 	RendererRD::MaterialStorage *material_storage = RendererRD::MaterialStorage::get_singleton();
 
@@ -457,13 +457,28 @@ RID RendererCanvasRenderRD::_create_base_uniform_set(RID p_to_render_target, boo
 		uniforms.push_back(u);
 	}
 
-	material_storage->samplers_rd_get_default().append_uniforms(uniforms, SAMPLERS_BINDING_FIRST_INDEX);
+	if (!p_height_prepass) {
+		RD::Uniform u;
+		u.uniform_type = RD::UNIFORM_TYPE_TEXTURE;
+		u.binding = 10;
+		u.append_id(state.height_buffer);
+		uniforms.push_back(u);
+	} else {
+		// rebind this bc uniform_set_create needs consistent number of uniforms
+		RD::Uniform u;
+		u.uniform_type = RD::UNIFORM_TYPE_TEXTURE;
+		u.binding = 10;
+		u.append_id(RendererRD::TextureStorage::get_singleton()->decal_atlas_get_texture());
+		uniforms.push_back(u);
+	}
 
+	material_storage->samplers_rd_get_default().append_uniforms(uniforms, SAMPLERS_BINDING_FIRST_INDEX);
+	
 	RID uniform_set = RD::get_singleton()->uniform_set_create(uniforms, shader.default_version_rd_shader, BASE_UNIFORM_SET);
 	if (p_backbuffer) {
-		texture_storage->render_target_set_backbuffer_uniform_set(p_to_render_target, uniform_set);
+		texture_storage->render_target_set_backbuffer_uniform_set(p_to_render_target, uniform_set, p_height_prepass);
 	} else {
-		texture_storage->render_target_set_framebuffer_uniform_set(p_to_render_target, uniform_set);
+		texture_storage->render_target_set_framebuffer_uniform_set(p_to_render_target, uniform_set, p_height_prepass);
 	}
 
 	return uniform_set;
@@ -1723,6 +1738,7 @@ void RendererCanvasRenderRD::set_time(double p_time) {
 }
 
 void RendererCanvasRenderRD::update() {
+	state.height_buffer_needs_clear = true;
 }
 
 RendererCanvasRenderRD::RendererCanvasRenderRD() {
@@ -1736,13 +1752,13 @@ RendererCanvasRenderRD::RendererCanvasRenderRD() {
 	}
 
 	// preallocate slots for uniform set 3
-	state.batch_texture_uniforms.resize(4);
+	state.batch_texture_uniforms.resize(5);
+
+	String global_defines;
+	global_defines += "#define MAX_LIGHTS " + itos(MAX_LIGHTS_PER_RENDER) + "\n";
+	global_defines += "\n#define SAMPLERS_BINDING_FIRST_INDEX " + itos(SAMPLERS_BINDING_FIRST_INDEX) + "\n";
 
 	{ //shader variants
-
-		String global_defines;
-		global_defines += "#define MAX_LIGHTS " + itos(MAX_LIGHTS_PER_RENDER) + "\n";
-		global_defines += "\n#define SAMPLERS_BINDING_FIRST_INDEX " + itos(SAMPLERS_BINDING_FIRST_INDEX) + "\n";
 
 		state.light_uniforms = memnew_arr(LightUniform, MAX_LIGHTS_PER_RENDER);
 		Vector<String> variants;
@@ -1790,6 +1806,9 @@ RendererCanvasRenderRD::RendererCanvasRenderRD() {
 		actions.renames["NORMAL_MAP"] = "normal_map";
 		actions.renames["NORMAL_MAP_DEPTH"] = "normal_map_depth";
 		actions.renames["TEXTURE"] = "color_texture";
+		actions.renames["HEIGHT_TEXTURE"] = "height_texture";
+		actions.renames["HEIGHT_BUFFER"] = "height_buffer";
+		actions.renames["BASE_HEIGHT"] = "base_height_interp";
 		actions.renames["TEXTURE_PIXEL_SIZE"] = "read_draw_data_color_texture_pixel_size";
 		actions.renames["NORMAL_TEXTURE"] = "normal_texture";
 		actions.renames["SPECULAR_SHININESS_TEXTURE"] = "specular_texture";
@@ -1836,12 +1855,14 @@ RendererCanvasRenderRD::RendererCanvasRenderRD() {
 		actions.custom_samplers["TEXTURE"] = "texture_sampler";
 		actions.custom_samplers["NORMAL_TEXTURE"] = "texture_sampler";
 		actions.custom_samplers["SPECULAR_SHININESS_TEXTURE"] = "texture_sampler";
+		actions.custom_samplers["HEIGHT_TEXTURE"] = "texture_sampler";
+		actions.custom_samplers["HEIGHT_BUFFER"] = "SAMPLER_NEAREST_CLAMP";
 		actions.base_texture_binding_index = 1;
 		actions.texture_layout_set = MATERIAL_UNIFORM_SET;
 		actions.base_uniform_string = "material.";
 		actions.default_filter = ShaderLanguage::FILTER_LINEAR;
 		actions.default_repeat = ShaderLanguage::REPEAT_DISABLE;
-		actions.base_varying_index = 9;
+		actions.base_varying_index = 10;
 
 		actions.global_buffer_array_variable = "global_shader_uniforms.data";
 		actions.instance_uniform_index_variable = "read_draw_data_instance_offset";
@@ -1921,6 +1942,20 @@ RendererCanvasRenderRD::RendererCanvasRenderRD() {
 		RD::get_singleton()->shader_destroy_modules(shadow_render.shader.version_get_shader(shadow_render.shader_version, SHADOW_RENDER_MODE_DIRECTIONAL_SHADOW));
 		RD::get_singleton()->shader_destroy_modules(shadow_render.shader.version_get_shader(shadow_render.shader_version, SHADOW_RENDER_MODE_POSITIONAL_SHADOW));
 		RD::get_singleton()->shader_destroy_modules(shadow_render.shader.version_get_shader(shadow_render.shader_version, SHADOW_RENDER_MODE_SDF));
+	}
+
+	{ // height prepass buffers
+		RD::TextureFormat tf;
+		tf.texture_type = RD::TEXTURE_TYPE_2D;
+		tf.width = 1;
+		tf.height = 1;
+		tf.format = RD::DATA_FORMAT_R16G16_SFLOAT;
+		tf.usage_bits = RD::TEXTURE_USAGE_COLOR_ATTACHMENT_BIT | RD::TEXTURE_USAGE_SAMPLING_BIT;
+		state.height_buffer = RD::get_singleton()->texture_create(tf, RD::TextureView());
+
+		Vector<RID> fb_textures;
+		fb_textures.push_back(state.height_buffer);
+		state.height_framebuffer = RD::get_singleton()->framebuffer_create(fb_textures);
 	}
 
 	{ //bindings
@@ -2014,6 +2049,38 @@ RendererCanvasRenderRD::RendererCanvasRenderRD() {
 		// PRIMITIVE
 		vf.write[attrib_F_index].format = RD::DATA_FORMAT_R32G32B32A32_UINT;
 		shader.primitive_vertex_format_id = RD::get_singleton()->vertex_format_create(vf);
+	}
+
+	{ // height prepass shader
+		Vector<String> versions;
+		versions.push_back("");
+		height_prepass.shader.initialize(versions, global_defines);
+		height_prepass.shader_version = height_prepass.shader.version_create();
+
+		Vector<RD::AttachmentFormat> attachments;
+		RD::AttachmentFormat af;
+		af.format = RD::DATA_FORMAT_R16G16_SFLOAT;
+		af.usage_flags = RD::TEXTURE_USAGE_COLOR_ATTACHMENT_BIT | RD::TEXTURE_USAGE_SAMPLING_BIT;
+		attachments.push_back(af);
+		height_prepass.framebuffer_format =
+				RD::get_singleton()->framebuffer_format_create(attachments);
+
+		RD::PipelineColorBlendState blend_state;
+		RD::PipelineColorBlendState::Attachment blend_att = RendererRD::MaterialStorage::ShaderData::blend_mode_to_blend_attachment(RendererRD::MaterialStorage::ShaderData::BlendMode::BLEND_MODE_MAX);
+		blend_state.attachments.push_back(blend_att);
+
+		RID shader_rid = height_prepass.shader.version_get_shader(
+				height_prepass.shader_version, 0);
+
+		height_prepass.pipeline_quad = RD::get_singleton()->render_pipeline_create(
+				shader_rid,
+				height_prepass.framebuffer_format,
+				shader.quad_vertex_format_id,
+				RD::RENDER_PRIMITIVE_TRIANGLES,
+				RD::PipelineRasterizationState(),
+				RD::PipelineMultisampleState(),
+				RD::PipelineDepthStencilState(),
+				blend_state);
 	}
 
 	{ //primitive
@@ -2260,16 +2327,16 @@ void RendererCanvasRenderRD::_render_batch_items(RenderTarget p_to_render_target
 
 	// Render batches
 
+	_resize_height_buffer(p_to_render_target);
+
 	RendererRD::TextureStorage *texture_storage = RendererRD::TextureStorage::get_singleton();
 
 	RID framebuffer;
-	RID fb_uniform_set;
 	bool clear = false;
 	Color clear_color;
 
 	if (p_to_backbuffer) {
 		framebuffer = texture_storage->render_target_get_rd_backbuffer_framebuffer(p_to_render_target.render_target);
-		fb_uniform_set = texture_storage->render_target_get_backbuffer_uniform_set(p_to_render_target.render_target);
 	} else {
 		framebuffer = texture_storage->render_target_get_rd_framebuffer(p_to_render_target.render_target);
 		texture_storage->render_target_set_msaa_needs_resolve(p_to_render_target.render_target, false); // If MSAA is enabled, our framebuffer will be resolved!
@@ -2283,15 +2350,51 @@ void RendererCanvasRenderRD::_render_batch_items(RenderTarget p_to_render_target
 			texture_storage->render_target_disable_clear_request(p_to_render_target.render_target);
 		}
 		// TODO: Obtain from framebuffer format eventually when this is implemented.
-		fb_uniform_set = texture_storage->render_target_get_framebuffer_uniform_set(p_to_render_target.render_target);
-	}
-
-	if (fb_uniform_set.is_null() || !RD::get_singleton()->uniform_set_is_valid(fb_uniform_set)) {
-		fb_uniform_set = _create_base_uniform_set(p_to_render_target.render_target, p_to_backbuffer);
 	}
 
 	RD::FramebufferFormatID fb_format = RD::get_singleton()->framebuffer_get_format(framebuffer);
 
+	// initialize uniform set3 for prepass and color
+	for (uint32_t i = 0; i <= state.current_batch_index; i++) {
+		Batch *batch = &state.canvas_instance_batches[i];
+		if (batch->instance_count == 0) {
+			continue;
+		}
+		_initialize_uniform_set_3_for_batch(batch);
+	}
+
+	{
+		Vector<Color> clear;
+		clear.push_back(Color(0, 0, 0, 0));
+		state.current_batch_uniform_set = RID();
+		RID fb_uniform_set = _get_framebuffer_uniform_set_rid(p_to_render_target.render_target, p_to_backbuffer, true);
+
+		RD::DrawListID height_draw_list = RD::get_singleton()->draw_list_begin(
+				state.height_framebuffer,
+				state.height_buffer_needs_clear ? RD::DRAW_CLEAR_COLOR_0 : RD::DRAW_DEFAULT_ALL, // clear our single color attachment to 0
+				clear,
+				0.0f,
+				0,
+				Rect2());
+		state.height_buffer_needs_clear = false;
+
+		RD::get_singleton()->draw_list_bind_uniform_set(
+				height_draw_list, fb_uniform_set, BASE_UNIFORM_SET);
+		RD::get_singleton()->draw_list_bind_uniform_set(
+				height_draw_list, state.default_transforms_uniform_set, TRANSFORMS_UNIFORM_SET);
+
+		for (uint32_t i = 0; i <= state.current_batch_index; i++) {
+			Batch *batch = &state.canvas_instance_batches[i];
+			if (batch->instance_count == 0) {
+				continue;
+			}
+			_render_batch_height(height_draw_list, batch);
+		}
+
+		RD::get_singleton()->draw_list_end();
+	}
+
+	RID fb_uniform_set = _get_framebuffer_uniform_set_rid(p_to_render_target.render_target, p_to_backbuffer, false);
 	RD::DrawListID draw_list = RD::get_singleton()->draw_list_begin(framebuffer, clear ? RD::DRAW_CLEAR_COLOR_0 : RD::DRAW_DEFAULT_ALL, clear_color, 1.0f, 0, Rect2(), RDD::BreadcrumbMarker::UI_PASS);
 
 	RD::get_singleton()->draw_list_bind_uniform_set(draw_list, fb_uniform_set, BASE_UNIFORM_SET);
@@ -2390,12 +2493,18 @@ void RendererCanvasRenderRD::_record_item_commands(const Item *p_item, RenderTar
 	}
 
 	bool use_lighting = (light_count > 0 || using_directional_lights);
-
 	if (use_lighting != r_current_batch->use_lighting) {
 		r_current_batch = _new_batch(r_batch_broken);
 		r_current_batch->use_lighting = use_lighting;
 	}
-
+	
+	// height occlusion
+	bool use_height_occlusion = p_item->height_occlusion_enabled;
+	if (use_height_occlusion != r_current_batch->use_height_occlusion) {
+		r_current_batch = _new_batch(r_batch_broken);
+		r_current_batch->use_height_occlusion = use_height_occlusion;
+	}
+	
 	const Item::Command *c = p_item->commands;
 	while (c) {
 		if (skipping && c->type != Item::Command::TYPE_ANIMATION_SLICE) {
@@ -2444,7 +2553,7 @@ void RendererCanvasRenderRD::_record_item_commands(const Item *p_item, RenderTar
 				TextureInfo *tex_info = texture_info_map.getptr(tex_state);
 				if (!tex_info) {
 					tex_info = &texture_info_map.insert(tex_state, TextureInfo())->value;
-					_prepare_batch_texture_info(rect->texture, tex_state, tex_info);
+					_prepare_batch_texture_info(rect->texture, tex_state, tex_info, rect->height_texture);
 				}
 
 				if (has_msdf != r_current_batch->use_msdf || rect->px_range != r_current_batch->msdf_pix_range || rect->outline != r_current_batch->msdf_outline) {
@@ -2527,6 +2636,8 @@ void RendererCanvasRenderRD::_record_item_commands(const Item *p_item, RenderTar
 				instance_data->dst_rect[1] = dst_rect.position.y;
 				instance_data->dst_rect[2] = dst_rect.size.width;
 				instance_data->dst_rect[3] = dst_rect.size.height;
+
+				instance_data->base_height = rect->base_height;
 
 				_add_to_batch(r_batch_broken, r_current_batch);
 			} break;
@@ -3006,38 +3117,8 @@ void RendererCanvasRenderRD::_canvas_texture_invalidation_callback(bool p_delete
 
 void RendererCanvasRenderRD::_render_batch(RD::DrawListID p_draw_list, CanvasShaderData *p_shader_data, RenderingDevice::FramebufferFormatID p_framebuffer_format, Light *p_lights, Batch const *p_batch, RenderingMethod::RenderInfo *r_render_info) {
 	{
-		RendererRD::TextureStorage *ts = RendererRD::TextureStorage::get_singleton();
-
 		RIDSetKey key(p_batch->tex_info->state);
-
 		const RID *uniform_set = rid_set_to_uniform_set.getptr(key);
-		if (uniform_set == nullptr) {
-			RD::Uniform *uniform_ptrw = state.batch_texture_uniforms.ptrw();
-			uniform_ptrw[0] = RD::Uniform(RD::UNIFORM_TYPE_TEXTURE, 0, p_batch->tex_info->diffuse);
-			uniform_ptrw[1] = RD::Uniform(RD::UNIFORM_TYPE_TEXTURE, 1, p_batch->tex_info->normal);
-			uniform_ptrw[2] = RD::Uniform(RD::UNIFORM_TYPE_TEXTURE, 2, p_batch->tex_info->specular);
-			uniform_ptrw[3] = RD::Uniform(RD::UNIFORM_TYPE_SAMPLER, 3, p_batch->tex_info->sampler);
-
-			RID rid = RD::get_singleton()->uniform_set_create(state.batch_texture_uniforms, shader.default_version_rd_shader, BATCH_UNIFORM_SET);
-			ERR_FAIL_COND_MSG(rid.is_null(), "Failed to create uniform set for batch.");
-
-			const RIDCache::Pair *iter = rid_set_to_uniform_set.insert(key, rid);
-			uniform_set = &iter->data;
-			RD::get_singleton()->uniform_set_set_invalidation_callback(rid, RendererCanvasRenderRD::_uniform_set_invalidation_callback, (void *)&iter->key);
-
-			// If this is a CanvasTexture, it must be tracked so that any changes to the diffuse, normal,
-			// or specular channels invalidate all associated uniform sets.
-			if (ts->owns_canvas_texture(p_batch->tex_info->state.texture)) {
-				KeyValue<RID, TightLocalVector<RID>> *kv = nullptr;
-				if (HashMap<RID, TightLocalVector<RID>>::Iterator i = canvas_texture_to_uniform_set.find(p_batch->tex_info->state.texture); i == canvas_texture_to_uniform_set.end()) {
-					kv = &*canvas_texture_to_uniform_set.insert(p_batch->tex_info->state.texture, { *uniform_set });
-				} else {
-					i->value.push_back(rid);
-					kv = &*i;
-				}
-				ts->canvas_texture_set_invalidation_callback(p_batch->tex_info->state.texture, RendererCanvasRenderRD::_canvas_texture_invalidation_callback, kv);
-			}
-		}
 
 		if (state.current_batch_uniform_set != *uniform_set) {
 			state.current_batch_uniform_set = *uniform_set;
@@ -3227,6 +3308,131 @@ void RendererCanvasRenderRD::_render_batch(RD::DrawListID p_draw_list, CanvasSha
 	}
 }
 
+void RendererCanvasRenderRD::_render_batch_height(RD::DrawListID p_draw_list, Batch const *p_batch) {
+	// Only quad path supported for now
+	if (p_batch->command_type != Item::Command::TYPE_RECT) {
+		return;
+	}
+
+	if (!p_batch->use_height_occlusion) {
+		return;
+	}
+
+	// Bind batch texture uniform set
+	{
+		RIDSetKey key(p_batch->tex_info->state);
+
+		const RID *uniform_set = rid_set_to_uniform_set.getptr(key);
+
+		if (state.current_batch_uniform_set != *uniform_set) {
+			state.current_batch_uniform_set = *uniform_set;
+			RD::get_singleton()->draw_list_bind_uniform_set(p_draw_list, *uniform_set, BATCH_UNIFORM_SET);
+		}
+	}
+
+	RD::get_singleton()->draw_list_bind_render_pipeline(
+			p_draw_list, height_prepass.pipeline_quad);
+
+	PushConstant push_constant = p_batch->push_constant();
+	RD::get_singleton()->draw_list_set_push_constant(
+			p_draw_list, &push_constant, sizeof(push_constant));
+
+	FixedVector<RID, 1> vb = { p_batch->instance_buffer };
+	FixedVector<uint64_t, 1> vo = { uint64_t(p_batch->start) * sizeof(InstanceData) };
+	RD::get_singleton()->draw_list_bind_vertex_buffers_format(
+			p_draw_list, shader.quad_vertex_format_id, 1, vb, vo);
+	RD::get_singleton()->draw_list_bind_index_array(
+			p_draw_list, shader.quad_index_array);
+	RD::get_singleton()->draw_list_draw(
+			p_draw_list, true, p_batch->instance_count);
+}
+
+void RendererCanvasRenderRD::_initialize_uniform_set_3_for_batch(Batch const *p_batch) {
+	RendererRD::TextureStorage *ts = RendererRD::TextureStorage::get_singleton();
+
+	RIDSetKey key(p_batch->tex_info->state);
+
+	const RID *uniform_set = rid_set_to_uniform_set.getptr(key);
+	if (uniform_set == nullptr) {
+		RD::Uniform *uniform_ptrw = state.batch_texture_uniforms.ptrw();
+		uniform_ptrw[0] = RD::Uniform(RD::UNIFORM_TYPE_TEXTURE, 0, p_batch->tex_info->diffuse);
+		uniform_ptrw[1] = RD::Uniform(RD::UNIFORM_TYPE_TEXTURE, 1, p_batch->tex_info->normal);
+		uniform_ptrw[2] = RD::Uniform(RD::UNIFORM_TYPE_TEXTURE, 2, p_batch->tex_info->specular);
+		uniform_ptrw[3] = RD::Uniform(RD::UNIFORM_TYPE_SAMPLER, 3, p_batch->tex_info->sampler);
+		uniform_ptrw[4] = RD::Uniform(RD::UNIFORM_TYPE_TEXTURE, 4, p_batch->tex_info->height);
+
+		RID rid = RD::get_singleton()->uniform_set_create(state.batch_texture_uniforms, shader.default_version_rd_shader, BATCH_UNIFORM_SET);
+		ERR_FAIL_COND_MSG(rid.is_null(), "Failed to create uniform set for batch.");
+
+		const RIDCache::Pair *iter = rid_set_to_uniform_set.insert(key, rid);
+		uniform_set = &iter->data;
+		RD::get_singleton()->uniform_set_set_invalidation_callback(rid, RendererCanvasRenderRD::_uniform_set_invalidation_callback, (void *)&iter->key);
+
+		// If this is a CanvasTexture, it must be tracked so that any changes to the diffuse, normal,
+		// or specular channels invalidate all associated uniform sets.
+		if (ts->owns_canvas_texture(p_batch->tex_info->state.texture)) {
+			KeyValue<RID, TightLocalVector<RID>> *kv = nullptr;
+			if (HashMap<RID, TightLocalVector<RID>>::Iterator i = canvas_texture_to_uniform_set.find(p_batch->tex_info->state.texture); i == canvas_texture_to_uniform_set.end()) {
+				kv = &*canvas_texture_to_uniform_set.insert(p_batch->tex_info->state.texture, { *uniform_set });
+			} else {
+				i->value.push_back(rid);
+				kv = &*i;
+			}
+			ts->canvas_texture_set_invalidation_callback(p_batch->tex_info->state.texture, RendererCanvasRenderRD::_canvas_texture_invalidation_callback, kv);
+		}
+	}
+}
+
+void RendererCanvasRenderRD::_resize_height_buffer(RenderTarget p_to_render_target) {
+	RendererRD::TextureStorage *texture_storage = RendererRD::TextureStorage::get_singleton();
+	Size2i ssize = texture_storage->render_target_get_size(p_to_render_target.render_target);
+
+	if (state.height_buffer_size != ssize) {
+		if (state.height_framebuffer.is_valid()) {
+			RD::get_singleton()->free_rid(state.height_framebuffer);
+		}
+		if (state.height_buffer.is_valid()) {
+			RD::get_singleton()->free_rid(state.height_buffer);
+		}
+
+		RD::TextureFormat tf;
+		tf.texture_type = RD::TEXTURE_TYPE_2D;
+		tf.width = ssize.width;
+		tf.height = ssize.height;
+		tf.format = RD::DATA_FORMAT_R16G16_SFLOAT;
+		tf.usage_bits = RD::TEXTURE_USAGE_COLOR_ATTACHMENT_BIT | RD::TEXTURE_USAGE_SAMPLING_BIT;
+		state.height_buffer = RD::get_singleton()->texture_create(tf, RD::TextureView());
+
+		Vector<RID> fb_textures;
+		fb_textures.push_back(state.height_buffer);
+		state.height_framebuffer = RD::get_singleton()->framebuffer_create(fb_textures);
+
+		state.height_buffer_size = ssize;
+
+		// Invalidate base uniform set so it gets rebuilt with the new height_buffer RID
+		texture_storage->render_target_set_framebuffer_uniform_set(
+				p_to_render_target.render_target, RID(), false);
+		texture_storage->render_target_set_framebuffer_uniform_set(
+				p_to_render_target.render_target, RID(), true);
+	}
+}
+
+RID RendererCanvasRenderRD::_get_framebuffer_uniform_set_rid(RID p_render_target, bool p_to_backbuffer, bool p_height_prepass) {
+	RendererRD::TextureStorage *texture_storage = RendererRD::TextureStorage::get_singleton();
+	RID fb_uniform_set;
+	if (p_to_backbuffer) {
+		fb_uniform_set = texture_storage->render_target_get_backbuffer_uniform_set(p_render_target, p_height_prepass);
+	} else {
+		fb_uniform_set = texture_storage->render_target_get_framebuffer_uniform_set(p_render_target, p_height_prepass);
+	}
+
+	if (fb_uniform_set.is_null() || !RD::get_singleton()->uniform_set_is_valid(fb_uniform_set)) {
+		fb_uniform_set = _create_base_uniform_set(p_render_target, p_to_backbuffer, p_height_prepass);
+	}
+
+	return fb_uniform_set;
+}
+
 RendererCanvasRenderRD::InstanceData *RendererCanvasRenderRD::new_instance_data(Batch &p_current_batch, const InstanceData &template_instance, bool p_use_push_data) {
 	InstanceData *instance_data = nullptr;
 
@@ -3310,7 +3516,7 @@ void RendererCanvasRenderRD::_allocate_instance_buffer() {
 	state.instance_data = reinterpret_cast<InstanceData *>(state.instance_buffers.map_raw_for_upload(0));
 }
 
-void RendererCanvasRenderRD::_prepare_batch_texture_info(RID p_texture, TextureState &p_state, TextureInfo *p_info) {
+void RendererCanvasRenderRD::_prepare_batch_texture_info(RID p_texture, TextureState &p_state, TextureInfo *p_info, RID p_height_texture) {
 	if (p_texture.is_null()) {
 		p_texture = default_canvas_texture;
 	}
@@ -3332,6 +3538,9 @@ void RendererCanvasRenderRD::_prepare_batch_texture_info(RID p_texture, TextureS
 	p_info->diffuse = info.diffuse;
 	p_info->normal = info.normal;
 	p_info->specular = info.specular;
+	p_info->height = p_height_texture.is_valid()
+			? RendererRD::TextureStorage::get_singleton()->texture_get_rd_texture(p_height_texture)
+			: RendererRD::TextureStorage::get_singleton()->texture_rd_get_default(RendererRD::TextureStorage::DEFAULT_RD_TEXTURE_BLACK);
 	p_info->sampler = info.sampler;
 
 	// cache values to be copied to instance data
@@ -3394,6 +3603,18 @@ RendererCanvasRenderRD::~RendererCanvasRenderRD() {
 
 	if (state.shadow_occluder_buffer.is_valid()) {
 		RD::get_singleton()->free_rid(state.shadow_occluder_buffer);
+	}
+
+	// height prepass
+	{
+		height_prepass.shader.version_free(height_prepass.shader_version);
+		if (state.height_framebuffer.is_valid()) {
+			RD::get_singleton()->free_rid(state.height_framebuffer);
+		}
+
+		if (state.height_buffer.is_valid()) {
+			RD::get_singleton()->free_rid(state.height_buffer);
+		}
 	}
 
 	state.instance_buffers.uninit();

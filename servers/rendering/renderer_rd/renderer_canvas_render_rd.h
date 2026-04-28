@@ -36,6 +36,7 @@
 #include "servers/rendering/renderer_rd/pipeline_hash_map_rd.h"
 #include "servers/rendering/renderer_rd/shaders/canvas.glsl.gen.h"
 #include "servers/rendering/renderer_rd/shaders/canvas_occlusion.glsl.gen.h"
+#include "servers/rendering/renderer_rd/shaders/canvas_height_prepass.glsl.gen.h"
 #include "servers/rendering/renderer_rd/storage_rd/material_storage.h"
 #include "servers/rendering/rendering_device.h"
 #include "servers/rendering/shader_compiler.h"
@@ -48,7 +49,7 @@ class RendererCanvasRenderRD : public RendererCanvasRender {
 		BATCH_UNIFORM_SET = 3,
 	};
 
-	const int SAMPLERS_BINDING_FIRST_INDEX = 10;
+	const int SAMPLERS_BINDING_FIRST_INDEX = 11;
 	// The size of the ring buffer to store GPU buffers. Triple-buffering the max expected frames in flight.
 	static const uint32_t BATCH_DATA_BUFFER_COUNT = 3;
 
@@ -346,6 +347,13 @@ class RendererCanvasRenderRD : public RendererCanvasRender {
 		RD::FramebufferFormatID sdf_framebuffer_format;
 	} shadow_render;
 
+	struct {
+		CanvasHeightPrepassShaderRD shader;
+		RID shader_version;
+		RID pipeline_quad;
+		RD::FramebufferFormatID framebuffer_format;
+	} height_prepass;
+
 	/***************/
 	/**** STATE ****/
 	/***************/
@@ -362,7 +370,8 @@ class RendererCanvasRenderRD : public RendererCanvasRender {
 				float ninepatch_margins[4];
 				float dst_rect[4];
 				float src_rect[4];
-				float pad[2];
+				float base_height;
+				float pad0;
 			};
 			//primitive
 			struct {
@@ -469,6 +478,7 @@ class RendererCanvasRenderRD : public RendererCanvasRender {
 		RID normal;
 		RID specular;
 		RID sampler;
+		RID height;
 		Vector2 texpixel_size;
 		uint32_t specular_shininess = 0;
 		uint32_t flags = 0;
@@ -541,6 +551,7 @@ class RendererCanvasRenderRD : public RendererCanvasRender {
 		bool use_msdf = false;
 		bool use_lcd = false;
 		bool has_blend = false;
+		bool use_height_occlusion = false;
 
 		// batch-specific data
 		union {
@@ -633,6 +644,12 @@ class RendererCanvasRenderRD : public RendererCanvasRender {
 		RID shadow_fb;
 		int shadow_texture_size = 2048;
 
+		RID height_buffer;
+		RID height_framebuffer;
+		RID height_fb_uniform_set;
+		Size2i height_buffer_size;
+		bool height_buffer_needs_clear = true;
+
 		RID shadow_occluder_buffer;
 		uint32_t shadow_occluder_buffer_size;
 		RID shadow_ocluder_uniform_set;
@@ -658,7 +675,7 @@ class RendererCanvasRenderRD : public RendererCanvasRender {
 	RS::CanvasItemTextureFilter default_filter = RS::CANVAS_ITEM_TEXTURE_FILTER_LINEAR;
 	RS::CanvasItemTextureRepeat default_repeat = RS::CANVAS_ITEM_TEXTURE_REPEAT_DISABLED;
 
-	RID _create_base_uniform_set(RID p_to_render_target, bool p_backbuffer);
+	RID _create_base_uniform_set(RID p_to_render_target, bool p_backbuffer, bool p_height_pass = false);
 
 	bool debug_redraw = false;
 	Color debug_redraw_color;
@@ -675,7 +692,11 @@ class RendererCanvasRenderRD : public RendererCanvasRender {
 	void _render_batch_items(RenderTarget p_to_render_target, int p_item_count, const Transform2D &p_canvas_transform_inverse, Light *p_lights, bool &r_sdf_used, bool p_to_backbuffer = false, RenderingMethod::RenderInfo *r_render_info = nullptr);
 	void _record_item_commands(const Item *p_item, RenderTarget p_render_target, const Transform2D &p_base_transform, Item *&r_current_clip, Light *p_lights, bool &r_batch_broken, bool &r_sdf_used, Batch *&r_current_batch);
 	void _render_batch(RD::DrawListID p_draw_list, CanvasShaderData *p_shader_data, RenderingDevice::FramebufferFormatID p_framebuffer_format, Light *p_lights, Batch const *p_batch, RenderingMethod::RenderInfo *r_render_info = nullptr);
-	void _prepare_batch_texture_info(RID p_texture, TextureState &p_state, TextureInfo *p_info);
+	void _initialize_uniform_set_3_for_batch(Batch const *p_batch);
+	void _render_batch_height(RD::DrawListID p_draw_list, Batch const *p_batch);
+	void _prepare_batch_texture_info(RID p_texture, TextureState &p_state, TextureInfo *p_info, RID p_height_texture = RID());
+	void _resize_height_buffer(RenderTarget p_to_render_target);
+	RID _get_framebuffer_uniform_set_rid(RID p_render_target, bool p_to_backbuffer, bool p_height_prepass);
 
 	// non-UMA
 	InstanceData *new_instance_data(Batch &p_current_batch, const InstanceData &template_instance, bool p_use_push_data = false);

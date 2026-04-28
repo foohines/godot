@@ -204,6 +204,9 @@ public:
 			float px_range;
 
 			RID texture;
+			RID height_texture;
+
+			float base_height = 0.0f;
 
 			CommandRect() {
 				flags = 0;
@@ -323,6 +326,7 @@ public:
 		bool on_interpolate_transform_list : 1;
 		bool interpolated : 1;
 		bool use_identity_transform : 1;
+		bool height_occlusion_enabled = false;
 
 		struct CanvasGroup {
 			RS::CanvasGroupMode mode;

@@ -37,6 +37,8 @@ class Sprite2D : public Node2D {
 	GDCLASS(Sprite2D, Node2D);
 
 	Ref<Texture2D> texture;
+	Ref<Texture2D> height_texture;
+	float base_height = 0.0f;
 
 #ifdef TOOLS_ENABLED
 	bool dragging_to_resize_rect = false;
@@ -98,6 +100,12 @@ public:
 
 	void set_texture(const Ref<Texture2D> &p_texture);
 	Ref<Texture2D> get_texture() const;
+
+	void set_height_texture(const Ref<Texture2D> &p_texture);
+	Ref<Texture2D> get_height_texture() const;
+
+	void set_base_height(float p_base_height);
+	float get_base_height() const;
 
 	void set_centered(bool p_center);
 	bool is_centered() const;

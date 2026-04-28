@@ -381,7 +381,9 @@ private:
 		Vector<RID> backbuffer_mipmaps;
 
 		RID framebuffer_uniform_set;
+		RID framebuffer_height_uniform_set;
 		RID backbuffer_uniform_set;
+		RID backbuffer_height_uniform_set;
 
 		RID sdf_buffer_write;
 		RID sdf_buffer_write_fb;
@@ -816,11 +818,11 @@ public:
 	RID render_target_get_rd_backbuffer(RID p_render_target);
 	RID render_target_get_rd_backbuffer_framebuffer(RID p_render_target);
 
-	RID render_target_get_framebuffer_uniform_set(RID p_render_target);
-	RID render_target_get_backbuffer_uniform_set(RID p_render_target);
+	RID render_target_get_framebuffer_uniform_set(RID p_render_target, bool p_height_prepass = false);
+	RID render_target_get_backbuffer_uniform_set(RID p_render_target, bool p_height_prepass = false);
 
-	void render_target_set_framebuffer_uniform_set(RID p_render_target, RID p_uniform_set);
-	void render_target_set_backbuffer_uniform_set(RID p_render_target, RID p_uniform_set);
+	void render_target_set_framebuffer_uniform_set(RID p_render_target, RID p_uniform_set, bool p_height_prepass = false);
+	void render_target_set_backbuffer_uniform_set(RID p_render_target, RID p_uniform_set, bool p_height_prepass = false);
 
 	static RD::DataFormat render_target_get_color_format(bool p_use_hdr, bool p_srgb);
 	static uint32_t render_target_get_color_usage_bits(bool p_msaa);

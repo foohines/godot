@@ -115,6 +115,7 @@ private:
 	bool notify_local_transform = false;
 	bool notify_transform = false;
 	bool hide_clip_children = false;
+	bool height_occlusion_enabled = false;
 
 	ClipChildrenMode clip_children_mode = CLIP_CHILDREN_DISABLED;
 
@@ -290,6 +291,9 @@ public:
 
 	void set_visibility_layer_bit(uint32_t p_visibility_layer, bool p_enable);
 	bool get_visibility_layer_bit(uint32_t p_visibility_layer) const;
+
+	void set_height_occlusion_enabled(bool p_enabled);
+	bool is_height_occlusion_enabled() const;
 
 	/* ORDERING */
 
