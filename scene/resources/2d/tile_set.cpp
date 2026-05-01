@@ -6257,6 +6257,15 @@ int TileData::get_y_sort_origin() const {
 	return y_sort_origin;
 }
 
+void TileData::set_base_height(float p_base_height) {
+	base_height = p_base_height;
+	emit_signal(CoreStringName(changed));
+}
+
+float TileData::get_base_height() const {
+	return base_height;
+}
+
 #ifndef DISABLE_DEPRECATED
 void TileData::set_occluder(int p_layer_id, Ref<OccluderPolygon2D> p_occluder_polygon) {
 	ERR_FAIL_INDEX(p_layer_id, occluders.size());
@@ -7109,6 +7118,8 @@ void TileData::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_z_index"), &TileData::get_z_index);
 	ClassDB::bind_method(D_METHOD("set_y_sort_origin", "y_sort_origin"), &TileData::set_y_sort_origin);
 	ClassDB::bind_method(D_METHOD("get_y_sort_origin"), &TileData::get_y_sort_origin);
+	ClassDB::bind_method(D_METHOD("set_base_height", "base_height"), &TileData::set_base_height);
+	ClassDB::bind_method(D_METHOD("get_base_height"), &TileData::get_base_height);
 
 	ClassDB::bind_method(D_METHOD("set_occluder_polygons_count", "layer_id", "polygons_count"), &TileData::set_occluder_polygons_count);
 	ClassDB::bind_method(D_METHOD("get_occluder_polygons_count", "layer_id"), &TileData::get_occluder_polygons_count);
@@ -7175,6 +7186,7 @@ void TileData::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "material", PROPERTY_HINT_RESOURCE_TYPE, "CanvasItemMaterial,ShaderMaterial"), "set_material", "get_material");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "z_index"), "set_z_index", "get_z_index");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "y_sort_origin"), "set_y_sort_origin", "get_y_sort_origin");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "base_height", PROPERTY_HINT_RANGE, "-1024,1024"), "set_base_height", "get_base_height");
 
 	ADD_GROUP("Terrains", "");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "terrain_set"), "set_terrain_set", "get_terrain_set");

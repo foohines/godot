@@ -314,6 +314,7 @@ void TileMapLayer::_rendering_update(bool p_force_cleanup) {
 				Ref<Material> prev_material;
 				int prev_z_index = 0;
 				RID prev_ci;
+				bool prev_use_height_occlusion;
 
 				for (SelfList<CellData> *cell_data_quadrant_list_element = rendering_quadrant->cells.first(); cell_data_quadrant_list_element; cell_data_quadrant_list_element = cell_data_quadrant_list_element->next()) {
 					CellData &cell_data = *cell_data_quadrant_list_element->self();
@@ -330,6 +331,7 @@ void TileMapLayer::_rendering_update(bool p_force_cleanup) {
 
 					Ref<Material> mat = tile_data->get_material();
 					int tile_z_index = tile_data->get_z_index();
+					bool use_height_occlusion = tile_data->get_base_height() != 0.0;
 
 					// Quandrant pos.
 
@@ -337,7 +339,7 @@ void TileMapLayer::_rendering_update(bool p_force_cleanup) {
 					RID ci;
 
 					// Check if the material or the z_index changed.
-					if (prev_ci == RID() || prev_material != mat || prev_z_index != tile_z_index) {
+					if (prev_ci == RID() || prev_material != mat || prev_z_index != tile_z_index || prev_use_height_occlusion != use_height_occlusion) {
 						// If so, create a new CanvasItem.
 						ci = rs->canvas_item_create();
 						if (needs_set_not_interpolated) {
@@ -359,12 +361,14 @@ void TileMapLayer::_rendering_update(bool p_force_cleanup) {
 
 						rs->canvas_item_set_default_texture_filter(ci, RS::CanvasItemTextureFilter(get_texture_filter_in_tree()));
 						rs->canvas_item_set_default_texture_repeat(ci, RS::CanvasItemTextureRepeat(get_texture_repeat_in_tree()));
+						
+						rs->canvas_item_set_height_occlusion_enabled(ci, use_height_occlusion);
 
 						rendering_quadrant->canvas_items.push_back(ci);
-
 						prev_ci = ci;
 						prev_material = mat;
 						prev_z_index = tile_z_index;
+						prev_use_height_occlusion = use_height_occlusion;
 
 					} else {
 						// Keep the same canvas_item to draw on.
@@ -2688,7 +2692,7 @@ void TileMapLayer::draw_tile(RID p_canvas_item, const Vector2 &p_position, const
 
 		// Get the tile modulation.
 		Color modulate = tile_data->get_modulate();
-
+	
 		// Compute the dest rect.
 		Rect2 dest_rect;
 		bool transpose;
@@ -2697,10 +2701,10 @@ void TileMapLayer::draw_tile(RID p_canvas_item, const Vector2 &p_position, const
 		// Draw the tile.
 		if (p_frame >= 0) {
 			Rect2i source_rect = atlas_source->get_runtime_tile_texture_region(p_atlas_coords, p_frame);
-			tex->draw_rect_region(p_canvas_item, dest_rect, source_rect, modulate, transpose, p_tile_set->is_uv_clipping());
+			tex->draw_rect_region(p_canvas_item, dest_rect, source_rect, modulate, transpose, p_tile_set->is_uv_clipping(), RID(), tile_data->get_base_height());
 		} else if (atlas_source->get_tile_animation_frames_count(p_atlas_coords) == 1) {
 			Rect2i source_rect = atlas_source->get_runtime_tile_texture_region(p_atlas_coords, 0);
-			tex->draw_rect_region(p_canvas_item, dest_rect, source_rect, modulate, transpose, p_tile_set->is_uv_clipping());
+			tex->draw_rect_region(p_canvas_item, dest_rect, source_rect, modulate, transpose, p_tile_set->is_uv_clipping(), RID(), tile_data->get_base_height());
 		} else {
 			real_t speed = atlas_source->get_tile_animation_speed(p_atlas_coords);
 			real_t animation_duration = atlas_source->get_tile_animation_total_duration(p_atlas_coords) / speed;

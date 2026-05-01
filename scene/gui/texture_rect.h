@@ -62,6 +62,9 @@ private:
 	ExpandMode expand_mode = EXPAND_KEEP_SIZE;
 	StretchMode stretch_mode = STRETCH_SCALE;
 
+	Ref<Texture2D> height_texture;
+	float base_height = 0.0f;
+
 	void _texture_changed();
 
 protected:
@@ -75,6 +78,12 @@ protected:
 public:
 	void set_texture(const Ref<Texture2D> &p_tex);
 	Ref<Texture2D> get_texture() const;
+
+	void set_height_texture(const Ref<Texture2D> &p_texture);
+	Ref<Texture2D> get_height_texture() const;
+
+	void set_base_height(float p_base_height);
+	float get_base_height() const;
 
 	void set_expand_mode(ExpandMode p_mode);
 	ExpandMode get_expand_mode() const;
