@@ -118,7 +118,7 @@ class RID_Alloc : public RID_AllocBase {
 
 	_FORCE_INLINE_ RID _allocate_rid() {
 		if constexpr (THREAD_SAFE) {
-			mutex.lock();
+			mutex.lock(); 
 		}
 
 		if (alloc_count == max_alloc) {

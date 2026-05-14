@@ -4084,7 +4084,8 @@ RID RenderingDevice::uniform_set_create(const VectorView<RD::Uniform> &p_uniform
 	uniform_set.shader_set = p_shader_set;
 	uniform_set.shader_id = p_shader;
 
-	RID id = uniform_set_owner.make_rid(uniform_set);
+    RID id = uniform_set_owner.make_rid(uniform_set);
+	// print_line(uniform_set_owner.get_rid_count());
 #ifdef DEV_ENABLED
 	set_resource_name(id, "RID:" + itos(id.get_id()));
 #endif
@@ -4783,7 +4784,11 @@ void RenderingDevice::draw_list_bind_uniform_set(DrawListID p_list, RID p_unifor
 	ERR_FAIL_COND(!draw_list.active);
 
 	const UniformSet *uniform_set = uniform_set_owner.get_or_null(p_uniform_set);
+	if (uniform_set == nullptr) {
+		print_line('o no');
+	}
 	ERR_FAIL_NULL(uniform_set);
+
 
 	if (p_index > draw_list.state.set_count) {
 		draw_list.state.set_count = p_index;

@@ -650,6 +650,8 @@ class RendererCanvasRenderRD : public RendererCanvasRender {
 		Size2i height_buffer_size;
 		bool height_buffer_needs_clear = true;
 
+		RID main_viewport_render_target;
+
 		RID shadow_occluder_buffer;
 		uint32_t shadow_occluder_buffer_size;
 		RID shadow_ocluder_uniform_set;
@@ -687,6 +689,8 @@ class RendererCanvasRenderRD : public RendererCanvasRender {
 		RID render_target;
 		bool use_linear_colors = false;
 	};
+
+	int uniform_count = 0;
 
 	inline RID _get_pipeline_specialization_or_ubershader(CanvasShaderData *p_shader_data, PipelineKey &r_pipeline_key, PushConstant &r_push_constant, RID p_mesh_instance = RID(), void *p_surface = nullptr, uint32_t p_surface_index = 0, RID *r_vertex_array = nullptr);
 	void _render_batch_items(RenderTarget p_to_render_target, int p_item_count, const Transform2D &p_canvas_transform_inverse, Light *p_lights, bool &r_sdf_used, bool p_to_backbuffer = false, RenderingMethod::RenderInfo *r_render_info = nullptr);

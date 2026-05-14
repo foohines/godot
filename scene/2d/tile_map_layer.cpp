@@ -331,7 +331,7 @@ void TileMapLayer::_rendering_update(bool p_force_cleanup) {
 
 					Ref<Material> mat = tile_data->get_material();
 					int tile_z_index = tile_data->get_z_index();
-					bool use_height_occlusion = tile_data->get_base_height() != 0.0;
+					bool use_height_occlusion = base_height + tile_data->get_base_height() != 0.0;
 
 					// Quandrant pos.
 
@@ -385,7 +385,7 @@ void TileMapLayer::_rendering_update(bool p_force_cleanup) {
 					}
 
 					// Drawing the tile in the canvas item.
-					draw_tile(ci, local_tile_pos - rendering_quadrant->canvas_items_position, tile_set, cell_data.cell.source_id, cell_data.cell.get_atlas_coords(), cell_data.cell.alternative_tile, -1, tile_data, random_animation_offset);
+					draw_tile(ci, local_tile_pos - rendering_quadrant->canvas_items_position, tile_set, cell_data.cell.source_id, cell_data.cell.get_atlas_coords(), cell_data.cell.alternative_tile, base_height, -1, tile_data, random_animation_offset);
 				}
 
 				// Reset physics interpolation for any recreated canvas items.
@@ -2242,6 +2242,9 @@ void TileMapLayer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("is_x_draw_order_reversed"), &TileMapLayer::is_x_draw_order_reversed);
 	ClassDB::bind_method(D_METHOD("set_rendering_quadrant_size", "size"), &TileMapLayer::set_rendering_quadrant_size);
 	ClassDB::bind_method(D_METHOD("get_rendering_quadrant_size"), &TileMapLayer::get_rendering_quadrant_size);
+	ClassDB::bind_method(D_METHOD("set_base_height", "base_height"), &TileMapLayer::set_base_height);
+	ClassDB::bind_method(D_METHOD("get_base_height"), &TileMapLayer::get_base_height);
+
 
 	ClassDB::bind_method(D_METHOD("set_collision_enabled", "enabled"), &TileMapLayer::set_collision_enabled);
 	ClassDB::bind_method(D_METHOD("is_collision_enabled"), &TileMapLayer::is_collision_enabled);
@@ -2277,6 +2280,7 @@ void TileMapLayer::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "y_sort_origin"), "set_y_sort_origin", "get_y_sort_origin");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "x_draw_order_reversed"), "set_x_draw_order_reversed", "is_x_draw_order_reversed");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "rendering_quadrant_size"), "set_rendering_quadrant_size", "get_rendering_quadrant_size");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "base_height", PROPERTY_HINT_RANGE, "-1024,1024"), "set_base_height", "get_base_height");
 	ADD_GROUP("Physics", "");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "collision_enabled"), "set_collision_enabled", "is_collision_enabled");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "use_kinematic_bodies"), "set_use_kinematic_bodies", "is_using_kinematic_bodies");
@@ -2662,7 +2666,7 @@ TileMapCell TileMapLayer::get_cell(const Vector2i &p_coords) const {
 	}
 }
 
-void TileMapLayer::draw_tile(RID p_canvas_item, const Vector2 &p_position, const Ref<TileSet> p_tile_set, int p_atlas_source_id, const Vector2i &p_atlas_coords, int p_alternative_tile, int p_frame, const TileData *p_tile_data_override, real_t p_normalized_animation_offset) {
+void TileMapLayer::draw_tile(RID p_canvas_item, const Vector2 &p_position, const Ref<TileSet> p_tile_set, int p_atlas_source_id, const Vector2i &p_atlas_coords, int p_alternative_tile, float base_height, int p_frame, const TileData *p_tile_data_override, real_t p_normalized_animation_offset) {
 	ERR_FAIL_COND(p_tile_set.is_null());
 	ERR_FAIL_COND(!p_tile_set->has_source(p_atlas_source_id));
 	ERR_FAIL_COND(!p_tile_set->get_source(p_atlas_source_id)->has_tile(p_atlas_coords));
@@ -2701,10 +2705,10 @@ void TileMapLayer::draw_tile(RID p_canvas_item, const Vector2 &p_position, const
 		// Draw the tile.
 		if (p_frame >= 0) {
 			Rect2i source_rect = atlas_source->get_runtime_tile_texture_region(p_atlas_coords, p_frame);
-			tex->draw_rect_region(p_canvas_item, dest_rect, source_rect, modulate, transpose, p_tile_set->is_uv_clipping(), RID(), tile_data->get_base_height());
+			tex->draw_rect_region(p_canvas_item, dest_rect, source_rect, modulate, transpose, p_tile_set->is_uv_clipping(), RID(), base_height + tile_data->get_base_height());
 		} else if (atlas_source->get_tile_animation_frames_count(p_atlas_coords) == 1) {
 			Rect2i source_rect = atlas_source->get_runtime_tile_texture_region(p_atlas_coords, 0);
-			tex->draw_rect_region(p_canvas_item, dest_rect, source_rect, modulate, transpose, p_tile_set->is_uv_clipping(), RID(), tile_data->get_base_height());
+			tex->draw_rect_region(p_canvas_item, dest_rect, source_rect, modulate, transpose, p_tile_set->is_uv_clipping(), RID(), base_height + tile_data->get_base_height());
 		} else {
 			real_t speed = atlas_source->get_tile_animation_speed(p_atlas_coords);
 			real_t animation_duration = atlas_source->get_tile_animation_total_duration(p_atlas_coords) / speed;
@@ -3383,6 +3387,15 @@ void TileMapLayer::set_rendering_quadrant_size(int p_size) {
 
 int TileMapLayer::get_rendering_quadrant_size() const {
 	return rendering_quadrant_size;
+}
+
+void TileMapLayer::set_base_height(float p_base_height) {
+	base_height = p_base_height;
+	emit_signal(CoreStringName(changed));
+}
+
+float TileMapLayer::get_base_height() const {
+	return base_height;
 }
 
 void TileMapLayer::set_collision_enabled(bool p_enabled) {

@@ -379,6 +379,8 @@ RID RendererCanvasRenderRD::_create_base_uniform_set(RID p_to_render_target, boo
 	RendererRD::TextureStorage *texture_storage = RendererRD::TextureStorage::get_singleton();
 	RendererRD::MaterialStorage *material_storage = RendererRD::MaterialStorage::get_singleton();
 
+	uniform_count++;
+
 	//re create canvas state
 	thread_local LocalVector<RD::Uniform> uniforms;
 	uniforms.clear();
@@ -1739,6 +1741,12 @@ void RendererCanvasRenderRD::set_time(double p_time) {
 
 void RendererCanvasRenderRD::update() {
 	state.height_buffer_needs_clear = true;
+	
+	RID main_vp = RSG::viewport->viewport_find_from_screen_attachment(DisplayServer::MAIN_WINDOW_ID);
+	state.main_viewport_render_target = main_vp.is_valid()
+		? RSG::viewport->viewport_get_render_target(main_vp)
+		: RID();
+
 }
 
 RendererCanvasRenderRD::RendererCanvasRenderRD() {
@@ -2326,8 +2334,12 @@ void RendererCanvasRenderRD::_render_batch_items(RenderTarget p_to_render_target
 	}
 
 	// Render batches
+	bool height_prepass_enabled = state.main_viewport_render_target.is_valid() && p_to_render_target.render_target == state.main_viewport_render_target;
+	if (height_prepass_enabled) {
+		_resize_height_buffer(p_to_render_target);
+	}
 
-	_resize_height_buffer(p_to_render_target);
+
 
 	RendererRD::TextureStorage *texture_storage = RendererRD::TextureStorage::get_singleton();
 
@@ -2363,9 +2375,11 @@ void RendererCanvasRenderRD::_render_batch_items(RenderTarget p_to_render_target
 		_initialize_uniform_set_3_for_batch(batch);
 	}
 
-	{
+
+	// height prepass
+	if (height_prepass_enabled) {
 		Vector<Color> clear;
-		clear.push_back(Color(0, 0, 0, 0));
+		clear.push_back(Color(-1024, 0, 0, 0));
 		state.current_batch_uniform_set = RID();
 		RID fb_uniform_set = _get_framebuffer_uniform_set_rid(p_to_render_target.render_target, p_to_backbuffer, true);
 
@@ -3386,8 +3400,9 @@ void RendererCanvasRenderRD::_initialize_uniform_set_3_for_batch(Batch const *p_
 void RendererCanvasRenderRD::_resize_height_buffer(RenderTarget p_to_render_target) {
 	RendererRD::TextureStorage *texture_storage = RendererRD::TextureStorage::get_singleton();
 	Size2i ssize = texture_storage->render_target_get_size(p_to_render_target.render_target);
+	Size2i height_buffer_size = texture_storage->render_target_get_height_buffer_size(p_to_render_target.render_target);
 
-	if (state.height_buffer_size != ssize) {
+	if (height_buffer_size != ssize) {
 		if (state.height_framebuffer.is_valid()) {
 			RD::get_singleton()->free_rid(state.height_framebuffer);
 		}
@@ -3407,7 +3422,7 @@ void RendererCanvasRenderRD::_resize_height_buffer(RenderTarget p_to_render_targ
 		fb_textures.push_back(state.height_buffer);
 		state.height_framebuffer = RD::get_singleton()->framebuffer_create(fb_textures);
 
-		state.height_buffer_size = ssize;
+		texture_storage->render_target_set_height_buffer_size(p_to_render_target.render_target, ssize);
 
 		// Invalidate base uniform set so it gets rebuilt with the new height_buffer RID
 		texture_storage->render_target_set_framebuffer_uniform_set(
@@ -3427,6 +3442,9 @@ RID RendererCanvasRenderRD::_get_framebuffer_uniform_set_rid(RID p_render_target
 	}
 
 	if (fb_uniform_set.is_null() || !RD::get_singleton()->uniform_set_is_valid(fb_uniform_set)) {
+		if (!fb_uniform_set.is_null() && !RD::get_singleton()->uniform_set_is_valid(fb_uniform_set)) {
+			// print_line("invalid uniform set");
+		}
 		fb_uniform_set = _create_base_uniform_set(p_render_target, p_to_backbuffer, p_height_prepass);
 	}
 

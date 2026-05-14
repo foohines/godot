@@ -400,6 +400,7 @@ private:
 	bool use_kinematic_bodies = false;
 	int physics_quadrant_size = 16;
 	DebugVisibilityMode collision_visibility_mode = DEBUG_VISIBILITY_MODE_DEFAULT;
+	float base_height = 0.0f;
 
 	bool occlusion_enabled = true;
 
@@ -547,7 +548,7 @@ public:
 	TileMapCell get_cell(const Vector2i &p_coords) const;
 
 	static void compute_transformed_tile_dest_rect(Rect2 &r_dest_rect, bool &r_transpose, const Vector2 &p_position, const Vector2 &p_dest_rect_size, const TileData *p_tile_data, int p_alternative_tile);
-	static void draw_tile(RID p_canvas_item, const Vector2 &p_position, const Ref<TileSet> p_tile_set, int p_atlas_source_id, const Vector2i &p_atlas_coords, int p_alternative_tile, int p_frame = -1, const TileData *p_tile_data_override = nullptr, real_t p_normalized_animation_offset = 0.0);
+	static void draw_tile(RID p_canvas_item, const Vector2 &p_position, const Ref<TileSet> p_tile_set, int p_atlas_source_id, const Vector2i &p_atlas_coords, int p_alternative_tile, float base_height, int p_frame = -1, const TileData *p_tile_data_override = nullptr, real_t p_normalized_animation_offset = 0.0);
 
 	////////////// Exposed functions //////////////
 
@@ -570,6 +571,7 @@ public:
 	bool is_cell_flipped_h(const Vector2i &p_coords) const;
 	bool is_cell_flipped_v(const Vector2i &p_coords) const;
 	bool is_cell_transposed(const Vector2i &p_coords) const;
+
 
 	// Patterns.
 	Ref<TileMapPattern> get_pattern(TypedArray<Vector2i> p_coords_array);
@@ -621,6 +623,9 @@ public:
 	virtual void set_light_mask(int p_light_mask) override;
 	void set_rendering_quadrant_size(int p_size);
 	int get_rendering_quadrant_size() const;
+	void set_base_height(float p_base_height);
+	float get_base_height() const;
+
 
 	void set_collision_enabled(bool p_enabled);
 	bool is_collision_enabled() const;

@@ -355,6 +355,7 @@ private:
 
 	struct RenderTarget {
 		Size2i size;
+		Size2i height_buffer_size;
 		uint32_t view_count;
 		RID color;
 		Vector<RID> color_slices;
@@ -768,6 +769,9 @@ public:
 	virtual bool render_target_is_using_hdr(RID p_render_target) const override;
 	virtual void render_target_set_use_debanding(RID p_render_target, bool p_use_debanding) override;
 	virtual bool render_target_is_using_debanding(RID p_render_target) const override;
+
+	void render_target_set_height_buffer_size(RID p_render_target, Size2i p_size);
+	Size2i render_target_get_height_buffer_size(RID p_render_target) const;
 
 	void render_target_copy_to_back_buffer(RID p_render_target, const Rect2i &p_region, bool p_gen_mipmaps);
 	void render_target_clear_back_buffer(RID p_render_target, const Rect2i &p_region, const Color &p_color);
