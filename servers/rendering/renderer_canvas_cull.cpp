@@ -724,6 +724,13 @@ void RendererCanvasCull::canvas_item_set_height_occlusion_enabled(RID p_item, bo
 	canvas_item->height_occlusion_enabled = p_enabled;
 }
 
+void RendererCanvasCull::canvas_item_set_sort_height(RID p_item, float p_sort_height) {
+	Item *canvas_item = canvas_item_owner.get_or_null(p_item);
+	ERR_FAIL_NULL(canvas_item);
+
+	canvas_item->sort_height = p_sort_height;
+}
+
 void RendererCanvasCull::canvas_item_set_update_when_visible(RID p_item, bool p_update) {
 	Item *canvas_item = canvas_item_owner.get_or_null(p_item);
 	ERR_FAIL_NULL(canvas_item);

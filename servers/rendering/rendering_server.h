@@ -1578,6 +1578,7 @@ public:
 	virtual void canvas_item_set_draw_behind_parent(RID p_item, bool p_enable) = 0;
 	virtual void canvas_item_set_use_identity_transform(RID p_item, bool p_enabled) = 0;
 	virtual void canvas_item_set_height_occlusion_enabled(RID p_item, bool p_enabled) = 0;
+	virtual void canvas_item_set_sort_height(RID p_item, float p_sort_height) = 0;
 
 	enum NinePatchAxisMode {
 		NINE_PATCH_STRETCH,

@@ -1459,6 +1459,9 @@ void CanvasItem::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_height_occlusion_enabled", "enabled"), &CanvasItem::set_height_occlusion_enabled);
 	ClassDB::bind_method(D_METHOD("is_height_occlusion_enabled"), &CanvasItem::is_height_occlusion_enabled);
 
+	ClassDB::bind_method(D_METHOD("set_sort_height", "sort_height"), &CanvasItem::set_sort_height);
+	ClassDB::bind_method(D_METHOD("get_sort_height"), &CanvasItem::get_sort_height);
+
 	ClassDB::bind_method(D_METHOD("set_texture_filter", "mode"), &CanvasItem::set_texture_filter);
 	ClassDB::bind_method(D_METHOD("get_texture_filter"), &CanvasItem::get_texture_filter);
 
@@ -1485,6 +1488,7 @@ void CanvasItem::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "z_as_relative"), "set_z_as_relative", "is_z_relative");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "y_sort_enabled"), "set_y_sort_enabled", "is_y_sort_enabled");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "height_occlusion_enabled"), "set_height_occlusion_enabled", "is_height_occlusion_enabled");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "sort_height"), "set_sort_height", "get_sort_height");
 
 	ADD_GROUP("Texture", "texture_");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "texture_filter", PROPERTY_HINT_ENUM, "Inherit,Nearest,Linear,Nearest Mipmap,Linear Mipmap,Nearest Mipmap Anisotropic,Linear Mipmap Anisotropic"), "set_texture_filter", "get_texture_filter");
@@ -1633,6 +1637,15 @@ void CanvasItem::set_height_occlusion_enabled(bool p_enabled) {
 
 bool CanvasItem::is_height_occlusion_enabled() const {
 	return height_occlusion_enabled;
+}
+
+void CanvasItem::set_sort_height(float p_sort_height) {
+	sort_height = p_sort_height;
+	RenderingServer::get_singleton()->canvas_item_set_sort_height(canvas_item, p_sort_height);
+}
+
+float CanvasItem::get_sort_height() const {
+	return sort_height;
 }
 
 void CanvasItem::_refresh_texture_filter_cache() const {

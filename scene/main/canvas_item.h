@@ -116,6 +116,7 @@ private:
 	bool notify_transform = false;
 	bool hide_clip_children = false;
 	bool height_occlusion_enabled = false;
+	float sort_height = 0.0f;
 
 	ClipChildrenMode clip_children_mode = CLIP_CHILDREN_DISABLED;
 
@@ -294,6 +295,9 @@ public:
 
 	void set_height_occlusion_enabled(bool p_enabled);
 	bool is_height_occlusion_enabled() const;
+
+	void set_sort_height(float p_sort_height);
+	float get_sort_height() const;
 
 	/* ORDERING */
 

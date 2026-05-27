@@ -57,6 +57,7 @@ public:
 		Transform2D ysort_xform; // Relative to y-sorted subtree's root item (identity for such root). Its `origin.y` is used for sorting.
 		int ysort_index;
 		int ysort_parent_abs_z_index; // Absolute Z index of parent. Only populated and used when y-sorting.
+		float sort_height = 0.0f;
 		uint32_t visibility_layer = 0xffffffff;
 
 		Vector<Item *> child_items;
@@ -96,6 +97,7 @@ public:
 			ysort_xform = Transform2D();
 			ysort_index = 0;
 			ysort_parent_abs_z_index = 0;
+			sort_height = 0.0f;
 
 			dependency_tracker.userdata = this;
 			dependency_tracker.changed_callback = &RendererCanvasCull::_dependency_changed;
@@ -114,8 +116,8 @@ public:
 
 	struct ItemYSort {
 		_FORCE_INLINE_ bool operator()(const Item *p_left, const Item *p_right) const {
-			const real_t left_y = p_left->ysort_xform.columns[2].y;
-			const real_t right_y = p_right->ysort_xform.columns[2].y;
+			const real_t left_y = p_left->ysort_xform.columns[2].y + p_left->sort_height;
+			const real_t right_y = p_right->ysort_xform.columns[2].y + p_right->sort_height;
 			if (Math::is_equal_approx(left_y, right_y)) {
 				return p_left->ysort_index < p_right->ysort_index;
 			}
@@ -253,6 +255,7 @@ public:
 	void canvas_item_set_draw_behind_parent(RID p_item, bool p_enable);
 	void canvas_item_set_use_identity_transform(RID p_item, bool p_enable);
 	void canvas_item_set_height_occlusion_enabled(RID p_item, bool p_enabled);
+	void canvas_item_set_sort_height(RID p_item, float p_sort_height);
 
 	void canvas_item_set_update_when_visible(RID p_item, bool p_update);
 
