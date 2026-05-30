@@ -400,7 +400,6 @@ private:
 	bool use_kinematic_bodies = false;
 	int physics_quadrant_size = 16;
 	DebugVisibilityMode collision_visibility_mode = DEBUG_VISIBILITY_MODE_DEFAULT;
-	float base_height = 0.0f;
 
 	bool occlusion_enabled = true;
 
@@ -623,9 +622,6 @@ public:
 	virtual void set_light_mask(int p_light_mask) override;
 	void set_rendering_quadrant_size(int p_size);
 	int get_rendering_quadrant_size() const;
-	void set_base_height(float p_base_height);
-	float get_base_height() const;
-
 
 	void set_collision_enabled(bool p_enabled);
 	bool is_collision_enabled() const;

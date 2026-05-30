@@ -893,19 +893,19 @@ void CanvasItem::draw_texture(RequiredParam<Texture2D> rp_texture, const Point2 
 	p_texture->draw(canvas_item, p_pos, p_modulate, false);
 }
 
-void CanvasItem::draw_texture_rect(RequiredParam<Texture2D> rp_texture, const Rect2 &p_rect, bool p_tile, const Color &p_modulate, bool p_transpose, RID p_height_texture, float p_base_height) {
+void CanvasItem::draw_texture_rect(RequiredParam<Texture2D> rp_texture, const Rect2 &p_rect, bool p_tile, const Color &p_modulate, bool p_transpose, RID p_height_texture) {
 	ERR_THREAD_GUARD;
 	ERR_DRAW_GUARD;
 
 	EXTRACT_PARAM_OR_FAIL(p_texture, rp_texture);
-	p_texture->draw_rect(canvas_item, p_rect, p_tile, p_modulate, p_transpose, p_height_texture, p_base_height);
+	p_texture->draw_rect(canvas_item, p_rect, p_tile, p_modulate, p_transpose, p_height_texture);
 }
 
-void CanvasItem::draw_texture_rect_region(RequiredParam<Texture2D> rp_texture, const Rect2 &p_rect, const Rect2 &p_src_rect, const Color &p_modulate, bool p_transpose, bool p_clip_uv, RID p_height_texture, float p_base_height) {
+void CanvasItem::draw_texture_rect_region(RequiredParam<Texture2D> rp_texture, const Rect2 &p_rect, const Rect2 &p_src_rect, const Color &p_modulate, bool p_transpose, bool p_clip_uv, RID p_height_texture) {
 	ERR_THREAD_GUARD;
 	ERR_DRAW_GUARD;
 	EXTRACT_PARAM_OR_FAIL(p_texture, rp_texture);
-	p_texture->draw_rect_region(canvas_item, p_rect, p_src_rect, p_modulate, p_transpose, p_clip_uv, p_height_texture, p_base_height);
+	p_texture->draw_rect_region(canvas_item, p_rect, p_src_rect, p_modulate, p_transpose, p_clip_uv, p_height_texture);
 }
 
 void CanvasItem::draw_msdf_texture_rect_region(RequiredParam<Texture2D> rp_texture, const Rect2 &p_rect, const Rect2 &p_src_rect, const Color &p_modulate, double p_outline, double p_pixel_range, double p_scale) {
@@ -1397,8 +1397,8 @@ void CanvasItem::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("draw_circle", "position", "radius", "color", "filled", "width", "antialiased"), &CanvasItem::draw_circle, DEFVAL(true), DEFVAL(-1.0), DEFVAL(false));
 	ClassDB::bind_method(D_METHOD("draw_ellipse", "position", "major", "minor", "color", "filled", "width", "antialiased"), &CanvasItem::draw_ellipse, DEFVAL(true), DEFVAL(-1.0), DEFVAL(false));
 	ClassDB::bind_method(D_METHOD("draw_texture", "texture", "position", "modulate"), &CanvasItem::draw_texture, DEFVAL(Color(1, 1, 1, 1)));
-	ClassDB::bind_method(D_METHOD("draw_texture_rect", "texture", "rect", "tile", "modulate", "transpose", "height_texture", "base_height"), &CanvasItem::draw_texture_rect, DEFVAL(Color(1, 1, 1, 1)), DEFVAL(false), DEFVAL(RID()), DEFVAL(0.0));
-	ClassDB::bind_method(D_METHOD("draw_texture_rect_region", "texture", "rect", "src_rect", "modulate", "transpose", "clip_uv", "height_texture", "base_height"), &CanvasItem::draw_texture_rect_region, DEFVAL(Color(1, 1, 1, 1)), DEFVAL(false), DEFVAL(true), DEFVAL(RID()), DEFVAL(0.0));
+	ClassDB::bind_method(D_METHOD("draw_texture_rect", "texture", "rect", "tile", "modulate", "transpose", "height_texture"), &CanvasItem::draw_texture_rect, DEFVAL(Color(1, 1, 1, 1)), DEFVAL(false), DEFVAL(RID()));
+	ClassDB::bind_method(D_METHOD("draw_texture_rect_region", "texture", "rect", "src_rect", "modulate", "transpose", "clip_uv", "height_texture"), &CanvasItem::draw_texture_rect_region, DEFVAL(Color(1, 1, 1, 1)), DEFVAL(false), DEFVAL(true), DEFVAL(RID()));
 	ClassDB::bind_method(D_METHOD("draw_msdf_texture_rect_region", "texture", "rect", "src_rect", "modulate", "outline", "pixel_range", "scale"), &CanvasItem::draw_msdf_texture_rect_region, DEFVAL(Color(1, 1, 1, 1)), DEFVAL(0.0), DEFVAL(4.0), DEFVAL(1.0));
 	ClassDB::bind_method(D_METHOD("draw_lcd_texture_rect_region", "texture", "rect", "src_rect", "modulate"), &CanvasItem::draw_lcd_texture_rect_region, DEFVAL(Color(1, 1, 1, 1)));
 	ClassDB::bind_method(D_METHOD("draw_style_box", "style_box", "rect"), &CanvasItem::draw_style_box);
@@ -1459,8 +1459,8 @@ void CanvasItem::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_height_occlusion_enabled", "enabled"), &CanvasItem::set_height_occlusion_enabled);
 	ClassDB::bind_method(D_METHOD("is_height_occlusion_enabled"), &CanvasItem::is_height_occlusion_enabled);
 
-	ClassDB::bind_method(D_METHOD("set_sort_height", "sort_height"), &CanvasItem::set_sort_height);
-	ClassDB::bind_method(D_METHOD("get_sort_height"), &CanvasItem::get_sort_height);
+	ClassDB::bind_method(D_METHOD("set_base_height", "base_height"), &CanvasItem::set_base_height);
+	ClassDB::bind_method(D_METHOD("get_base_height"), &CanvasItem::get_base_height);
 
 	ClassDB::bind_method(D_METHOD("set_texture_filter", "mode"), &CanvasItem::set_texture_filter);
 	ClassDB::bind_method(D_METHOD("get_texture_filter"), &CanvasItem::get_texture_filter);
@@ -1488,7 +1488,7 @@ void CanvasItem::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "z_as_relative"), "set_z_as_relative", "is_z_relative");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "y_sort_enabled"), "set_y_sort_enabled", "is_y_sort_enabled");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "height_occlusion_enabled"), "set_height_occlusion_enabled", "is_height_occlusion_enabled");
-	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "sort_height"), "set_sort_height", "get_sort_height");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "base_height"), "set_base_height", "get_base_height");
 
 	ADD_GROUP("Texture", "texture_");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "texture_filter", PROPERTY_HINT_ENUM, "Inherit,Nearest,Linear,Nearest Mipmap,Linear Mipmap,Nearest Mipmap Anisotropic,Linear Mipmap Anisotropic"), "set_texture_filter", "get_texture_filter");
@@ -1506,6 +1506,7 @@ void CanvasItem::_bind_methods() {
 	ADD_SIGNAL(MethodInfo("visibility_changed"));
 	ADD_SIGNAL(MethodInfo("hidden"));
 	ADD_SIGNAL(MethodInfo("item_rect_changed"));
+	ADD_SIGNAL(MethodInfo("base_height_changed"));
 
 	BIND_CONSTANT(NOTIFICATION_TRANSFORM_CHANGED);
 	BIND_CONSTANT(NOTIFICATION_LOCAL_TRANSFORM_CHANGED);
@@ -1631,21 +1632,26 @@ bool CanvasItem::get_visibility_layer_bit(uint32_t p_visibility_layer) const {
 }
 
 void CanvasItem::set_height_occlusion_enabled(bool p_enabled) {
+	ERR_THREAD_GUARD;
 	height_occlusion_enabled = p_enabled;
 	RenderingServer::get_singleton()->canvas_item_set_height_occlusion_enabled(canvas_item, p_enabled);
 }
 
 bool CanvasItem::is_height_occlusion_enabled() const {
+	ERR_READ_THREAD_GUARD_V(0)
 	return height_occlusion_enabled;
 }
 
-void CanvasItem::set_sort_height(float p_sort_height) {
-	sort_height = p_sort_height;
-	RenderingServer::get_singleton()->canvas_item_set_sort_height(canvas_item, p_sort_height);
+void CanvasItem::set_base_height(float p_base_height) {
+	ERR_THREAD_GUARD;
+	base_height = p_base_height;
+	RenderingServer::get_singleton()->canvas_item_set_base_height(canvas_item, p_base_height);
+	emit_signal(SceneStringName(base_height_changed));
 }
 
-float CanvasItem::get_sort_height() const {
-	return sort_height;
+float CanvasItem::get_base_height() const {
+	ERR_READ_THREAD_GUARD_V(0)
+	return base_height;
 }
 
 void CanvasItem::_refresh_texture_filter_cache() const {

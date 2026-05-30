@@ -62,6 +62,7 @@ public:
 	const StringName _ready = "_ready";
 
 	const StringName item_rect_changed = "item_rect_changed";
+	const StringName base_height_changed = "base_height_changed";
 	const StringName size_flags_changed = "size_flags_changed";
 	const StringName minimum_size_changed = "minimum_size_changed";
 	const StringName sleeping_state_changed = "sleeping_state_changed";

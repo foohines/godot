@@ -57,7 +57,6 @@ public:
 		Transform2D ysort_xform; // Relative to y-sorted subtree's root item (identity for such root). Its `origin.y` is used for sorting.
 		int ysort_index;
 		int ysort_parent_abs_z_index; // Absolute Z index of parent. Only populated and used when y-sorting.
-		float sort_height = 0.0f;
 		uint32_t visibility_layer = 0xffffffff;
 
 		Vector<Item *> child_items;
@@ -97,7 +96,6 @@ public:
 			ysort_xform = Transform2D();
 			ysort_index = 0;
 			ysort_parent_abs_z_index = 0;
-			sort_height = 0.0f;
 
 			dependency_tracker.userdata = this;
 			dependency_tracker.changed_callback = &RendererCanvasCull::_dependency_changed;
@@ -116,8 +114,8 @@ public:
 
 	struct ItemYSort {
 		_FORCE_INLINE_ bool operator()(const Item *p_left, const Item *p_right) const {
-			const real_t left_y = p_left->ysort_xform.columns[2].y + p_left->sort_height;
-			const real_t right_y = p_right->ysort_xform.columns[2].y + p_right->sort_height;
+			const real_t left_y = p_left->ysort_xform.columns[2].y;
+			const real_t right_y = p_right->ysort_xform.columns[2].y;
 			if (Math::is_equal_approx(left_y, right_y)) {
 				return p_left->ysort_index < p_right->ysort_index;
 			}
@@ -255,7 +253,7 @@ public:
 	void canvas_item_set_draw_behind_parent(RID p_item, bool p_enable);
 	void canvas_item_set_use_identity_transform(RID p_item, bool p_enable);
 	void canvas_item_set_height_occlusion_enabled(RID p_item, bool p_enabled);
-	void canvas_item_set_sort_height(RID p_item, float p_sort_height);
+	void canvas_item_set_base_height(RID p_item, float p_base_height);
 
 	void canvas_item_set_update_when_visible(RID p_item, bool p_update);
 
@@ -265,8 +263,8 @@ public:
 	void canvas_item_add_rect(RID p_item, const Rect2 &p_rect, const Color &p_color, bool p_antialiased);
 	void canvas_item_add_ellipse(RID p_item, const Point2 &p_pos, float p_major, float p_minor, const Color &p_color, bool p_antialiased = false);
 	void canvas_item_add_circle(RID p_item, const Point2 &p_pos, float p_radius, const Color &p_color, bool p_antialiased);
-	void canvas_item_add_texture_rect(RID p_item, const Rect2 &p_rect, RID p_texture, bool p_tile = false, const Color &p_modulate = Color(1, 1, 1), bool p_transpose = false, RID p_height_texture = RID(), float p_base_height = 0.0f);
-	void canvas_item_add_texture_rect_region(RID p_item, const Rect2 &p_rect, RID p_texture, const Rect2 &p_src_rect, const Color &p_modulate = Color(1, 1, 1), bool p_transpose = false, bool p_clip_uv = false, RID p_height_texture = RID(), float p_base_height = 0.0f);
+	void canvas_item_add_texture_rect(RID p_item, const Rect2 &p_rect, RID p_texture, bool p_tile = false, const Color &p_modulate = Color(1, 1, 1), bool p_transpose = false, RID p_height_texture = RID());
+	void canvas_item_add_texture_rect_region(RID p_item, const Rect2 &p_rect, RID p_texture, const Rect2 &p_src_rect, const Color &p_modulate = Color(1, 1, 1), bool p_transpose = false, bool p_clip_uv = false, RID p_height_texture = RID(), bool p_override_base_height = false, float p_base_height = 0.0f);
 	void canvas_item_add_msdf_texture_rect_region(RID p_item, const Rect2 &p_rect, RID p_texture, const Rect2 &p_src_rect, const Color &p_modulate = Color(1, 1, 1), int p_outline_size = 0, float p_px_range = 1.0, float p_scale = 1.0);
 	void canvas_item_add_lcd_texture_rect_region(RID p_item, const Rect2 &p_rect, RID p_texture, const Rect2 &p_src_rect, const Color &p_modulate = Color(1, 1, 1));
 	void canvas_item_add_nine_patch(RID p_item, const Rect2 &p_rect, const Rect2 &p_source, RID p_texture, const Vector2 &p_topleft, const Vector2 &p_bottomright, RS::NinePatchAxisMode p_x_axis_mode = RS::NINE_PATCH_STRETCH, RS::NinePatchAxisMode p_y_axis_mode = RS::NINE_PATCH_STRETCH, bool p_draw_center = true, const Color &p_modulate = Color(1, 1, 1));

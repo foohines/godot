@@ -94,9 +94,9 @@ void TextureRect::_notification(int p_what) {
 
 			RID height_texture_rid = height_texture.is_valid() ? height_texture->get_rid() : RID();
 			if (region.has_area()) {
-				draw_texture_rect_region(texture, Rect2(offset, size), region, Color(1, 1, 1), false, false, height_texture_rid, base_height);
+				draw_texture_rect_region(texture, Rect2(offset, size), region, Color(1, 1, 1), false, false, height_texture_rid);
 			} else {
-				draw_texture_rect(texture, Rect2(offset, size), tile, Color(1, 1, 1), false, height_texture_rid, base_height);
+				draw_texture_rect(texture, Rect2(offset, size), tile, Color(1, 1, 1), false, height_texture_rid);
 			}
 		} break;
 		case NOTIFICATION_RESIZED: {
@@ -139,8 +139,6 @@ void TextureRect::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("set_height_texture", "height_texture"), &TextureRect::set_height_texture);
 	ClassDB::bind_method(D_METHOD("get_height_texture"), &TextureRect::get_height_texture);
-	ClassDB::bind_method(D_METHOD("set_base_height", "base_height"), &TextureRect::set_base_height);
-	ClassDB::bind_method(D_METHOD("get_base_height"), &TextureRect::get_base_height);
 
 	ClassDB::bind_method(D_METHOD("set_expand_mode", "expand_mode"), &TextureRect::set_expand_mode);
 	ClassDB::bind_method(D_METHOD("get_expand_mode"), &TextureRect::get_expand_mode);
@@ -153,7 +151,6 @@ void TextureRect::_bind_methods() {
 
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "texture", PROPERTY_HINT_RESOURCE_TYPE, "Texture2D"), "set_texture", "get_texture");
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "height_texture", PROPERTY_HINT_RESOURCE_TYPE, "Texture2D"), "set_height_texture", "get_height_texture");
-	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "base_height", PROPERTY_HINT_RANGE, "-1024,1024"), "set_base_height", "get_base_height");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "expand_mode", PROPERTY_HINT_ENUM, "Keep Size,Ignore Size,Fit Width,Fit Width Proportional,Fit Height,Fit Height Proportional"), "set_expand_mode", "get_expand_mode");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "stretch_mode", PROPERTY_HINT_ENUM, "Scale,Tile,Keep,Keep Centered,Keep Aspect,Keep Aspect Centered,Keep Aspect Covered"), "set_stretch_mode", "get_stretch_mode");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "flip_h"), "set_flip_h", "is_flipped_h");
@@ -224,19 +221,6 @@ void TextureRect::set_height_texture(const Ref<Texture2D> &p_texture) {
 Ref<Texture2D> TextureRect::get_height_texture() const {
 	return height_texture;
 }
-
-void TextureRect::set_base_height(float p_base_height) {
-	if (base_height == p_base_height) {
-		return;
-	}
-
-	base_height = p_base_height;
-	queue_redraw();
-}
-float TextureRect::get_base_height() const {
-	return base_height;
-}
-
 
 void TextureRect::set_expand_mode(ExpandMode p_mode) {
 	if (expand_mode == p_mode) {

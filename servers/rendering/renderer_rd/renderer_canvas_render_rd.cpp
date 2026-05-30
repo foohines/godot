@@ -2651,7 +2651,7 @@ void RendererCanvasRenderRD::_record_item_commands(const Item *p_item, RenderTar
 				instance_data->dst_rect[2] = dst_rect.size.width;
 				instance_data->dst_rect[3] = dst_rect.size.height;
 
-				instance_data->base_height = rect->base_height;
+				instance_data->base_height = rect->override_base_height ? rect->base_height : p_item->base_height;
 
 				_add_to_batch(r_batch_broken, r_current_batch);
 			} break;
