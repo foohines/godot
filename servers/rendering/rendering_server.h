@@ -199,6 +199,15 @@ public:
 	virtual RID texture_get_rd_texture(RID p_texture, bool p_srgb = false) const = 0;
 	virtual uint64_t texture_get_native_handle(RID p_texture, bool p_srgb = false) const = 0;
 
+	/* HEIGHT SORT API */
+	virtual bool texture_height_sort_exists(RID p_texture) const = 0;
+	virtual void texture_set_height_sort(RID p_texture, int p_frame_count, Vector2i p_frame_size, const PackedByteArray &p_height_data, const TypedArray<Rect2i> &p_tight_rects) = 0;
+
+	virtual void canvas_item_set_height_sort_contributor(RID p_item, RID p_contributor_item, RID p_texture, Vector2 p_local_offset) = 0;
+	virtual void canvas_item_remove_height_sort_contributor(RID p_item, RID p_contributor_item) = 0;
+	virtual void canvas_item_set_height_sort_frame(RID p_item, RID p_contributor_item, int p_frame) = 0;
+	virtual void canvas_item_set_height_sort_offset(RID p_item, RID p_contributor_item, Vector2 p_local_offset) = 0;
+
 	/* PIPELINES API */
 
 	enum PipelineSource {

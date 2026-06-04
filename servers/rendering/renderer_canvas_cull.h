@@ -40,6 +40,44 @@ class RendererCanvasCull {
 	static void _dependency_deleted(const RID &p_dependency, DependencyTracker *p_tracker);
 
 public:
+	struct HeightSort {
+		LocalVector<uint8_t> y_to_height;
+		LocalVector<Rect2i>tight_rects;
+		int frame_count = 0;
+		Vector2i frame_size;
+	};
+
+	struct HeightSortEdge {
+    	int from;
+    	int to;
+	};
+
+	struct HeightSortContributor {
+		RID canvas_item_rid;
+		HeightSort *height_sort = nullptr;
+		int current_frame = 0;
+		Vector2 local_offset;
+
+		Rect2 get_sort_rect() {
+			ERR_FAIL_NULL_V(height_sort, Rect2());
+			Rect2 sort_rect = Rect2(height_sort->tight_rects[current_frame]);
+			sort_rect.position += local_offset;
+			return sort_rect;
+		}
+
+		uint8_t sample_height(real_t p_y_relative_to_sort_ancestor) {
+			ERR_FAIL_NULL_V(height_sort, 0);
+
+			int y = int(p_y_relative_to_sort_ancestor - local_offset.y);
+
+			if (y < 0 || y >= height_sort->frame_size.y) {
+				return 0;
+			}
+			return height_sort->y_to_height[current_frame * height_sort->frame_size.y + y];
+		}
+	};
+
+
 	struct Item : public RendererCanvasRender::Item {
 		RID parent; // canvas it belongs to
 		RID self;
@@ -58,6 +96,10 @@ public:
 		int ysort_index;
 		int ysort_parent_abs_z_index; // Absolute Z index of parent. Only populated and used when y-sorting.
 		uint32_t visibility_layer = 0xffffffff;
+
+		LocalVector<HeightSortContributor> height_sort_contributors;
+		Rect2 sort_rect;
+		bool sort_rect_dirty = true;
 
 		Vector<Item *> child_items;
 
@@ -218,6 +260,13 @@ private:
 
 	Transform2D _current_camera_transform;
 
+	AHashMap<RID, HeightSort*> height_sort_cache;
+	LocalVector<HeightSortEdge> _sort_edges;
+	LocalVector<int> _sort_indegree;
+
+	LocalVector<int> _sort_queue;
+	LocalVector<int> _sort_result;
+
 public:
 	void render_canvas(RID p_render_target, Canvas *p_canvas, const Transform2D &p_transform, RendererCanvasRender::Light *p_lights, RendererCanvasRender::Light *p_directional_lights, const Rect2 &p_clip_rect, RS::CanvasItemTextureFilter p_default_filter, RS::CanvasItemTextureRepeat p_default_repeat, bool p_snap_2d_transforms_to_pixel, bool p_snap_2d_vertices_to_pixel, uint32_t p_canvas_cull_mask, RenderingMethod::RenderInfo *r_render_info = nullptr);
 
@@ -254,6 +303,23 @@ public:
 	void canvas_item_set_use_identity_transform(RID p_item, bool p_enable);
 	void canvas_item_set_height_occlusion_enabled(RID p_item, bool p_enabled);
 	void canvas_item_set_base_height(RID p_item, float p_base_height);
+
+	bool texture_height_sort_exists(RID p_texture) const;
+	void texture_set_height_sort(RID p_texture, int p_frame_count, Vector2i p_frame_size, const PackedByteArray &p_height_data, const TypedArray<Rect2i> &p_tight_rects);
+
+	void canvas_item_set_height_sort_contributor(RID p_item, RID p_contributor_item, RID p_texture, Vector2 p_local_offset);
+	void canvas_item_remove_height_sort_contributor(RID p_item, RID p_contributor_item);
+	void canvas_item_set_height_sort_frame(RID p_item, RID p_contributor_item, int p_frame);
+	void canvas_item_set_height_sort_offset(RID p_item, RID p_contributor_item, Vector2 p_local_offset);
+
+private:
+	void _resolve_item_sort_rect(Item &p_item);
+	void _resolve_item_sort_rects(Item** p_y_sorted_items, int p_item_count);
+	int _sample_item_height(Item *p_item, real_t p_local_y);
+	void _height_sort(Item** p_y_sorted_items, int p_item_count);
+
+
+public:
 
 	void canvas_item_set_update_when_visible(RID p_item, bool p_update);
 

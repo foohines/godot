@@ -987,6 +987,17 @@ public:
 	FUNC2(canvas_item_set_height_occlusion_enabled, RID, bool)
 	FUNC2(canvas_item_set_base_height, RID, float)
 
+	
+	FUNC1RC(bool, texture_height_sort_exists, RID)
+	FUNC5(texture_set_height_sort, RID, int, Vector2i, const PackedByteArray &, const TypedArray<Rect2i> &)
+
+	FUNC4(canvas_item_set_height_sort_contributor, RID, RID, RID, Vector2)
+	FUNC2(canvas_item_remove_height_sort_contributor, RID, RID)
+	FUNC3(canvas_item_set_height_sort_frame, RID, RID, int)
+	FUNC3(canvas_item_set_height_sort_offset, RID, RID, Vector2)
+
+	
+
 	FUNC6(canvas_item_add_line, RID, const Point2 &, const Point2 &, const Color &, float, bool)
 	FUNC5(canvas_item_add_polyline, RID, const Vector<Point2> &, const Vector<Color> &, float, bool)
 	FUNC5(canvas_item_add_multiline, RID, const Vector<Point2> &, const Vector<Color> &, float, bool)

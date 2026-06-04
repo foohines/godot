@@ -3361,6 +3361,15 @@ void RenderingServer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("canvas_item_reset_physics_interpolation", "item"), &RenderingServer::canvas_item_reset_physics_interpolation);
 	ClassDB::bind_method(D_METHOD("canvas_item_transform_physics_interpolation", "item", "transform"), &RenderingServer::canvas_item_transform_physics_interpolation);
 
+	/* HEIGHT SORT */
+	ClassDB::bind_method(D_METHOD("texture_height_sort_exists", "texture"), &RenderingServer::texture_height_sort_exists);
+	ClassDB::bind_method(D_METHOD("texture_set_height_sort", "texture", "frame_count", "frame_size", "height_data", "tight_rects"), &RenderingServer::texture_set_height_sort);
+
+	ClassDB::bind_method(D_METHOD("canvas_item_set_height_sort_contributor", "item", "contributor_item", "texture", "local_offset"), &RenderingServer::canvas_item_set_height_sort_contributor);
+	ClassDB::bind_method(D_METHOD("canvas_item_remove_height_sort_contributor", "item", "contributor_item"), &RenderingServer::canvas_item_remove_height_sort_contributor);
+	ClassDB::bind_method(D_METHOD("canvas_item_set_height_sort_frame", "item", "contributor_item", "frame"), &RenderingServer::canvas_item_set_height_sort_frame);
+	ClassDB::bind_method(D_METHOD("canvas_item_set_height_sort_offset", "item", "contributor_item", "local_offset"), &RenderingServer::canvas_item_set_height_sort_offset);
+
 	/* Primitives */
 
 	ClassDB::bind_method(D_METHOD("canvas_item_add_line", "item", "from", "to", "color", "width", "antialiased"), &RenderingServer::canvas_item_add_line, DEFVAL(-1.0), DEFVAL(false));
@@ -3403,6 +3412,8 @@ void RenderingServer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("canvas_item_set_canvas_group_mode", "item", "mode", "clear_margin", "fit_empty", "fit_margin", "blur_mipmaps"), &RenderingServer::canvas_item_set_canvas_group_mode, DEFVAL(5.0), DEFVAL(false), DEFVAL(0.0), DEFVAL(false));
 
 	ClassDB::bind_method(D_METHOD("debug_canvas_item_get_rect", "item"), &RenderingServer::debug_canvas_item_get_rect);
+
+
 
 	BIND_ENUM_CONSTANT(NINE_PATCH_STRETCH);
 	BIND_ENUM_CONSTANT(NINE_PATCH_TILE);

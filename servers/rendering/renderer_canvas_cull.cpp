@@ -454,6 +454,8 @@ void RendererCanvasCull::_cull_canvas_item(Item *p_canvas_item, const Transform2
 			SortArray<Item *, ItemYSort> sorter;
 			sorter.sort(child_items, child_item_count);
 
+			_height_sort(child_items, child_item_count);
+
 			for (i = 0; i < child_item_count; i++) {
 				_cull_canvas_item(child_items[i], final_xform * child_items[i]->ysort_xform, p_clip_rect, modulate * child_items[i]->ysort_modulate, child_items[i]->ysort_parent_abs_z_index, r_z_list, r_z_last_list, (Item *)ci->final_clip_owner, (Item *)child_items[i]->material_owner, true, p_canvas_cull_mask, child_items[i]->repeat_size, child_items[i]->repeat_times, child_items[i]->repeat_source_item);
 			}
@@ -729,6 +731,243 @@ void RendererCanvasCull::canvas_item_set_base_height(RID p_item, float p_base_he
 	ERR_FAIL_NULL(canvas_item);
 
 	canvas_item->base_height = p_base_height;
+}
+
+bool RendererCanvasCull::texture_height_sort_exists(RID p_texture) const {
+	return height_sort_cache.has(p_texture);
+}
+
+void RendererCanvasCull::texture_set_height_sort(RID p_texture, int p_frame_count, Vector2i p_frame_size, const PackedByteArray &p_height_data, const TypedArray<Rect2i> &p_tight_rects) {
+	ERR_FAIL_COND(p_height_data.size() < p_frame_count * p_frame_size.y);
+	ERR_FAIL_COND(p_tight_rects.size() < p_frame_count);
+
+	HeightSort *height_sort = nullptr;
+	if (height_sort_cache.has(p_texture)) {
+		height_sort = height_sort_cache.get(p_texture);
+	} else {
+		height_sort = memnew(HeightSort);
+		height_sort_cache.insert(p_texture, height_sort);
+	}
+
+	height_sort->frame_count = p_frame_count;
+	height_sort->frame_size = p_frame_size;
+
+	height_sort->y_to_height.resize(p_frame_count * p_frame_size.y);
+	memcpy(height_sort->y_to_height.ptr(), p_height_data.ptr(), p_frame_count * p_frame_size.y);
+
+	height_sort->tight_rects.resize(p_frame_count);
+	for (int i = 0; i < p_frame_count; i++) {
+		height_sort->tight_rects[i] = p_tight_rects[i];
+	}
+}
+
+void RendererCanvasCull::canvas_item_set_height_sort_contributor(RID p_item, RID p_contributor_item, RID p_texture, Vector2 p_local_offset) {
+	Item *canvas_item = canvas_item_owner.get_or_null(p_item);
+
+	ERR_FAIL_NULL(canvas_item);
+	ERR_FAIL_COND(!canvas_item_owner.owns(p_contributor_item));
+	ERR_FAIL_COND(!height_sort_cache.has(p_texture));
+
+	canvas_item->sort_rect_dirty = true;
+
+	HeightSortContributor *contributor = nullptr;
+	for (HeightSortContributor &c : canvas_item->height_sort_contributors) {
+		if (c.canvas_item_rid == p_contributor_item) {
+			contributor = &c;
+			break;
+		}
+	}
+
+	if (!contributor) {
+		canvas_item->height_sort_contributors.push_back(HeightSortContributor());
+		contributor = &canvas_item->height_sort_contributors[canvas_item->height_sort_contributors.size() - 1];
+	}
+
+	contributor->canvas_item_rid = p_contributor_item;
+	contributor->height_sort = height_sort_cache.get(p_texture);
+	contributor->local_offset = p_local_offset;
+	contributor->current_frame = 0;
+}
+
+void RendererCanvasCull::canvas_item_remove_height_sort_contributor(RID p_item, RID p_contributor_item) {
+	Item *canvas_item = canvas_item_owner.get_or_null(p_item);
+	ERR_FAIL_NULL(canvas_item);
+
+	canvas_item->sort_rect_dirty = true;
+
+	for (uint32_t i = 0; i < canvas_item->height_sort_contributors.size(); i++) {
+		if (canvas_item->height_sort_contributors[i].canvas_item_rid == p_contributor_item) {
+			canvas_item->height_sort_contributors.remove_at_unordered(i);
+			break;
+		}
+	}
+}
+
+void RendererCanvasCull::canvas_item_set_height_sort_frame(RID p_item, RID p_contributor_item, int p_frame) {
+	Item *canvas_item = canvas_item_owner.get_or_null(p_item);
+	ERR_FAIL_NULL(canvas_item);
+
+	canvas_item->sort_rect_dirty = true;
+
+	for (HeightSortContributor &c : canvas_item->height_sort_contributors) {
+		if (c.canvas_item_rid == p_contributor_item) {
+			c.current_frame = p_frame;
+			break;
+		}
+	}
+}
+
+void RendererCanvasCull::canvas_item_set_height_sort_offset(RID p_item, RID p_contributor_item, Vector2 p_offset) {
+	Item *canvas_item = canvas_item_owner.get_or_null(p_item);
+	ERR_FAIL_NULL(canvas_item);
+
+	canvas_item->sort_rect_dirty = true;
+
+	for (HeightSortContributor &c : canvas_item->height_sort_contributors) {
+		if (c.canvas_item_rid == p_contributor_item) {
+			c.local_offset = p_offset;
+			break;
+		}
+	}
+}
+
+void RendererCanvasCull::_resolve_item_sort_rect(Item &p_item) {
+	if (p_item.height_sort_contributors.is_empty()) {
+		p_item.sort_rect = Rect2();
+	} else {
+		p_item.sort_rect = p_item.height_sort_contributors[0].get_sort_rect();
+		for (uint32_t i = 1; i < p_item.height_sort_contributors.size(); i++) {
+			HeightSortContributor &contributor = p_item.height_sort_contributors[i];
+			p_item.sort_rect = p_item.sort_rect.merge(contributor.get_sort_rect());
+		}
+	}
+
+	p_item.sort_rect_dirty = false;
+}
+
+void RendererCanvasCull::_resolve_item_sort_rects(Item **p_y_sorted_items, int p_item_count) {
+	for (int i = 0; i < p_item_count; i++) {
+		Item *item = p_y_sorted_items[i];
+		if (item->sort_rect_dirty) {
+			_resolve_item_sort_rect(*item);
+		}
+	}
+}
+
+int RendererCanvasCull::_sample_item_height(Item *p_item, real_t p_local_y) {
+	int max_height = 0;
+	for (HeightSortContributor &c : p_item->height_sort_contributors) {
+		int h = c.sample_height(p_local_y);
+		max_height = MAX(max_height, h);
+	}
+	return max_height;
+}
+
+void RendererCanvasCull::_height_sort(Item **p_y_sorted_items, int p_item_count) {
+	_resolve_item_sort_rects(p_y_sorted_items, p_item_count);
+
+	_sort_edges.clear();
+	_sort_indegree.resize(p_item_count);
+	memset(_sort_indegree.ptr(), 0, p_item_count * sizeof(int));
+	_sort_result.clear();
+	_sort_queue.clear();
+	Rect2 *transformed_rects = (Rect2 *)alloca(p_item_count * sizeof(Rect2));
+
+	for (int i = 0; i < p_item_count; i++) {
+		transformed_rects[i] = p_y_sorted_items[i]->ysort_xform.xform(p_y_sorted_items[i]->sort_rect);
+		if (Engine::get_singleton()->get_frames_drawn() == 4000 && transformed_rects[i].has_area()) {
+			print_line(p_y_sorted_items[i]->self);
+		}
+	}
+
+	// populate _sort_edges and _sort_indegree
+	for (int i = 0; i < p_item_count; i++) {
+		for (int j = i + 1; j < p_item_count; j++) {
+			Item *a = p_y_sorted_items[i];
+			Item *b = p_y_sorted_items[j];
+
+			Rect2 &rect_a = transformed_rects[i];
+			Rect2 &rect_b = transformed_rects[j];
+
+			if (!rect_a.intersects(rect_b)) {
+				continue;
+			}
+
+			real_t shared_y_bottom = MIN(rect_a.get_end().y, rect_b.get_end().y);
+
+			real_t a_local_y = shared_y_bottom - a->ysort_xform.columns[2].y;
+			real_t b_local_y = shared_y_bottom - b->ysort_xform.columns[2].y;
+
+			float a_height = _sample_item_height(a, a_local_y) + a->base_height;
+			float b_height = _sample_item_height(b, b_local_y) + b->base_height;
+
+			if (a_height < b_height) {
+				_sort_edges.push_back({ i, j });
+				_sort_indegree[j]++;
+			} else if (b_height < a_height) {
+				_sort_edges.push_back({ j, i });
+				_sort_indegree[i]++;
+			}
+		}
+	}
+
+	// khans algorithm with ysort priority queue
+
+	// initialize queue with all nodes that have indegree 0
+	for (int i = 0; i < p_item_count; i++) {
+		if (_sort_indegree[i] == 0) {
+			_sort_queue.push_back(i);
+		}
+	}
+
+	while (_sort_result.size() < (uint32_t)p_item_count) {
+		if (_sort_queue.is_empty()) {
+			// cycle detected - greedy break
+			// find lowest index node with indegree > 0
+			int best = -1;
+			for (int i = 0; i < p_item_count; i++) {
+				if (_sort_indegree[i] > 0) {
+					best = i;
+					break;
+				}
+			}
+			ERR_FAIL_COND_MSG(best == -1, "Shouldnt happen :(");
+			_sort_indegree[best] = 0;
+			_sort_queue.push_back(best);
+			continue;
+		}
+
+
+		// find lowest index in queue
+		uint32_t best_queue_index = 0;
+		for (uint32_t i = 1; i < _sort_queue.size(); i++) {
+			if (_sort_queue[i] < _sort_queue[best_queue_index]) {
+				best_queue_index = i;
+			}
+		}
+
+		int item_index = _sort_queue[best_queue_index];
+		_sort_queue.remove_at_unordered(best_queue_index);
+		_sort_result.push_back(item_index);
+
+		for (uint32_t i = 0; i < _sort_edges.size(); i++) {
+			if (_sort_edges[i].from == item_index) {
+				int dependant_index = _sort_edges[i].to;
+				_sort_indegree[dependant_index]--;
+				if (_sort_indegree[dependant_index] == 0) {
+					_sort_queue.push_back(dependant_index);
+				}
+			}
+		}
+
+
+	}
+
+	Item **sorted_copy = (Item **)alloca(p_item_count * sizeof(Item *));
+	for (int i = 0; i < p_item_count; i++) {
+		sorted_copy[i] = p_y_sorted_items[_sort_result[i]];
+	}
+	memcpy(p_y_sorted_items, sorted_copy, p_item_count * sizeof(Item *));
 }
 
 void RendererCanvasCull::canvas_item_set_update_when_visible(RID p_item, bool p_update) {
@@ -2814,4 +3053,8 @@ RendererCanvasCull::~RendererCanvasCull() {
 	memfree(z_list);
 	memfree(z_last_list);
 	_canvas_cull_singleton = nullptr;
+
+	for (KeyValue<RID, HeightSort *> &kv : height_sort_cache) {
+		memdelete(kv.value);
+	}
 }
