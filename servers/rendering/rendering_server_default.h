@@ -995,8 +995,15 @@ public:
 	FUNC2(canvas_item_remove_height_sort_contributor, RID, RID)
 	FUNC3(canvas_item_set_height_sort_frame, RID, RID, int)
 	FUNC3(canvas_item_set_height_sort_offset, RID, RID, Vector2)
+	FUNC3(canvas_item_set_height_sort_flip_h, RID, RID, bool)
+	FUNC1R(Rect2, canvas_item_get_sort_rect, RID)
+
+	FUNC2(canvas_item_set_height_sort_debug, RID, bool)
+	FUNC1R(PackedFloat32Array, canvas_item_get_height_sort_debug_data, RID)
 
 	
+
+	FUNC2(canvas_item_set_is_player, RID, bool)
 
 	FUNC6(canvas_item_add_line, RID, const Point2 &, const Point2 &, const Color &, float, bool)
 	FUNC5(canvas_item_add_polyline, RID, const Vector<Point2> &, const Vector<Color> &, float, bool)

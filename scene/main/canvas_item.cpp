@@ -39,6 +39,7 @@
 #include "scene/resources/multimesh.h"
 #include "scene/resources/style_box.h"
 #include "scene/resources/world_2d.h"
+#include "scene/theme/theme_db.h"
 
 #define ERR_DRAW_GUARD \
 	ERR_FAIL_COND_MSG(!drawing, "Drawing is only allowed inside this node's `_draw()`, functions connected to its `draw` signal, or when it receives NOTIFICATION_DRAW.")
@@ -383,6 +384,10 @@ void CanvasItem::_notification(int p_what) {
 				notification(NOTIFICATION_RESET_PHYSICS_INTERPOLATION);
 			}
 
+			if (height_sort_debug_enabled) {
+				get_tree()->connect(SNAME("process_frame"), callable_mp(this, &CanvasItem::queue_redraw));
+			}
+
 		} break;
 		case NOTIFICATION_EXIT_TREE: {
 			ERR_MAIN_THREAD_GUARD;
@@ -422,6 +427,10 @@ void CanvasItem::_notification(int p_what) {
 			if (get_viewport()) {
 				get_parent()->disconnect(SNAME("child_order_changed"), callable_mp(get_viewport(), &Viewport::canvas_parent_mark_dirty).bind(get_parent()));
 			}
+
+			if (height_sort_debug_enabled) {
+				get_tree()->disconnect(SNAME("process_frame"), callable_mp(this, &CanvasItem::queue_redraw));
+			}
 		} break;
 
 		case NOTIFICATION_RESET_PHYSICS_INTERPOLATION: {
@@ -446,6 +455,21 @@ void CanvasItem::_notification(int p_what) {
 			ERR_MAIN_THREAD_GUARD;
 
 			_notify_transform();
+		} break;
+		case NOTIFICATION_DRAW: {
+			if (height_sort_debug_enabled) {
+				Rect2 sort_rect = RS::get_singleton()->canvas_item_get_sort_rect(canvas_item);
+				draw_rect(sort_rect, Color(0, 0, 1, 0.6), false, 1);
+
+				PackedFloat32Array debug_data = RS::get_singleton()->canvas_item_get_height_sort_debug_data(get_canvas_item());
+				Ref<Font> font = ThemeDB::get_singleton()->get_fallback_font();
+				for (int i = 0; i < debug_data.size(); i += 4) {
+					Vector2 pos(debug_data[i], debug_data[i + 1]);
+					pos += Vector2(10, 10);
+					draw_string(font, pos, String::num(debug_data[i + 2]));
+					draw_string(font, pos + Vector2(0, 16), String::num(debug_data[i + 3]));
+				}
+			}
 		} break;
 	}
 }
@@ -714,6 +738,25 @@ bool CanvasItem::is_y_sort_enabled() const {
 	return y_sort_enabled;
 }
 
+void CanvasItem::set_height_sort_debug_enabled(bool p_enabled) {
+	ERR_THREAD_GUARD;
+	height_sort_debug_enabled = p_enabled;
+	RS::get_singleton()->canvas_item_set_height_sort_debug(canvas_item, height_sort_debug_enabled);
+	if (is_inside_tree()) {
+		if (p_enabled) {
+			get_tree()->connect(SNAME("process_frame"), callable_mp(this, &CanvasItem::queue_redraw));
+		} else {
+			get_tree()->disconnect(SNAME("process_frame"), callable_mp(this, &CanvasItem::queue_redraw));
+		}
+	}
+	queue_redraw();
+}
+
+bool CanvasItem::is_height_sort_debug_enabled() {
+	ERR_READ_THREAD_GUARD_V(false);
+	return height_sort_debug_enabled;
+}
+
 void CanvasItem::draw_dashed_line(const Point2 &p_from, const Point2 &p_to, const Color &p_color, real_t p_width, real_t p_dash, bool p_aligned, bool p_antialiased) {
 	ERR_THREAD_GUARD;
 	ERR_DRAW_GUARD;
@@ -937,6 +980,10 @@ void CanvasItem::draw_primitive(const Vector<Point2> &p_points, const Vector<Col
 
 	RID rid = p_texture.is_valid() ? p_texture->get_rid() : RID();
 	RenderingServer::get_singleton()->canvas_item_add_primitive(canvas_item, p_points, p_colors, p_uvs, rid);
+}
+
+void CanvasItem::set_is_player(bool p_is_player) {
+	RenderingServer::get_singleton()->canvas_item_set_is_player(canvas_item, p_is_player);
 }
 
 void CanvasItem::draw_set_transform(const Point2 &p_offset, real_t p_rot, const Size2 &p_scale) {
@@ -1382,6 +1429,11 @@ void CanvasItem::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_y_sort_enabled", "enabled"), &CanvasItem::set_y_sort_enabled);
 	ClassDB::bind_method(D_METHOD("is_y_sort_enabled"), &CanvasItem::is_y_sort_enabled);
 
+	ClassDB::bind_method(D_METHOD("set_height_sort_debug_enabled", "enabled"), &CanvasItem::set_height_sort_debug_enabled);
+	ClassDB::bind_method(D_METHOD("is_height_sort_debug_enabled"), &CanvasItem::is_height_sort_debug_enabled);
+
+	ClassDB::bind_method(D_METHOD("set_is_player", "is_player"), &CanvasItem::set_is_player);
+
 	ClassDB::bind_method(D_METHOD("set_draw_behind_parent", "enable"), &CanvasItem::set_draw_behind_parent);
 	ClassDB::bind_method(D_METHOD("is_draw_behind_parent_enabled"), &CanvasItem::is_draw_behind_parent_enabled);
 
@@ -1482,13 +1534,14 @@ void CanvasItem::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "clip_children", PROPERTY_HINT_ENUM, "Disabled,Clip Only,Clip + Draw"), "set_clip_children_mode", "get_clip_children_mode");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "light_mask", PROPERTY_HINT_LAYERS_2D_RENDER), "set_light_mask", "get_light_mask");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "visibility_layer", PROPERTY_HINT_LAYERS_2D_RENDER), "set_visibility_layer", "get_visibility_layer");
-	
+
 	ADD_GROUP("Ordering", "");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "z_index", PROPERTY_HINT_RANGE, itos(RS::CANVAS_ITEM_Z_MIN) + "," + itos(RS::CANVAS_ITEM_Z_MAX) + ",1"), "set_z_index", "get_z_index");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "z_as_relative"), "set_z_as_relative", "is_z_relative");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "y_sort_enabled"), "set_y_sort_enabled", "is_y_sort_enabled");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "height_occlusion_enabled"), "set_height_occlusion_enabled", "is_height_occlusion_enabled");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "base_height"), "set_base_height", "get_base_height");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "height_sort_debug_enabled"), "set_height_sort_debug_enabled", "is_height_sort_debug_enabled");
 
 	ADD_GROUP("Texture", "texture_");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "texture_filter", PROPERTY_HINT_ENUM, "Inherit,Nearest,Linear,Nearest Mipmap,Linear Mipmap,Nearest Mipmap Anisotropic,Linear Mipmap Anisotropic"), "set_texture_filter", "get_texture_filter");

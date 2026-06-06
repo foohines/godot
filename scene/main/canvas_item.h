@@ -101,6 +101,7 @@ private:
 	int z_index = 0;
 	bool z_relative = true;
 	bool y_sort_enabled = false;
+	bool height_sort_debug_enabled = false;
 
 	Window *window = nullptr;
 	bool visible = true;
@@ -218,6 +219,8 @@ public:
 		NOTIFICATION_WORLD_2D_CHANGED = 36,
 	};
 
+	void set_is_player(bool p_is_player);
+
 	/* EDITOR AND DEBUGGING */
 
 #ifdef TOOLS_ENABLED
@@ -310,6 +313,9 @@ public:
 
 	virtual void set_y_sort_enabled(bool p_enabled);
 	virtual bool is_y_sort_enabled() const;
+
+	void set_height_sort_debug_enabled(bool p_enabled);
+	bool is_height_sort_debug_enabled();
 
 	/* DRAWING API */
 

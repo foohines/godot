@@ -569,6 +569,12 @@ void RendererCanvasCull::canvas_set_parent(RID p_canvas, RID p_parent, float p_s
 	canvas->parent_scale = p_scale;
 }
 
+void RendererCanvasCull::canvas_item_set_is_player(RID p_item, bool p_is_player) {
+	Item *canvas_item = canvas_item_owner.get_or_null(p_item);
+	ERR_FAIL_NULL(canvas_item);
+	canvas_item->is_player = p_is_player;
+}
+
 RID RendererCanvasCull::canvas_item_allocate() {
 	return canvas_item_owner.allocate_rid();
 }
@@ -831,6 +837,46 @@ void RendererCanvasCull::canvas_item_set_height_sort_offset(RID p_item, RID p_co
 	}
 }
 
+void RendererCanvasCull::canvas_item_set_height_sort_flip_h(RID p_item, RID p_contributor_item, bool p_flip_h) {
+	Item *canvas_item = canvas_item_owner.get_or_null(p_item);
+	ERR_FAIL_NULL(canvas_item);
+
+	canvas_item->sort_rect_dirty = true;
+
+	for (HeightSortContributor &c : canvas_item->height_sort_contributors) {
+		if (c.canvas_item_rid == p_contributor_item) {
+			c.flip_h = p_flip_h;
+			break;
+		}
+	}
+}
+
+Rect2 RendererCanvasCull::canvas_item_get_sort_rect(RID p_item) {
+	Item *canvas_item = canvas_item_owner.get_or_null(p_item);
+	ERR_FAIL_NULL_V(canvas_item, Rect2());
+
+	return canvas_item->sort_rect;
+}
+
+void RendererCanvasCull::canvas_item_set_height_sort_debug(RID p_item, bool p_enabled) {
+	Item *canvas_item = canvas_item_owner.get_or_null(p_item);
+	ERR_FAIL_NULL(canvas_item);
+
+	canvas_item->height_sort_debug = true;
+}
+
+PackedFloat32Array RendererCanvasCull::canvas_item_get_height_sort_debug_data(RID p_item) {
+	Item *canvas_item = canvas_item_owner.get_or_null(p_item);
+	ERR_FAIL_NULL_V(canvas_item, PackedFloat32Array());
+	PackedFloat32Array result;
+
+	result.resize(canvas_item->height_sort_debug_data.size());
+	memcpy(result.ptrw(), canvas_item->height_sort_debug_data.ptr(),
+			canvas_item->height_sort_debug_data.size() * sizeof(float));
+
+	return result;
+}
+
 void RendererCanvasCull::_resolve_item_sort_rect(Item &p_item) {
 	if (p_item.height_sort_contributors.is_empty()) {
 		p_item.sort_rect = Rect2();
@@ -854,6 +900,14 @@ void RendererCanvasCull::_resolve_item_sort_rects(Item **p_y_sorted_items, int p
 	}
 }
 
+void RendererCanvasCull::_clear_height_sort_debug(Item **p_y_sorted_items, int p_item_count) {
+	for (int i = 0; i < p_item_count; i++) {
+		if (p_y_sorted_items[i]->height_sort_debug) {
+			p_y_sorted_items[i]->height_sort_debug_data.clear();
+		}
+	}
+}
+
 int RendererCanvasCull::_sample_item_height(Item *p_item, real_t p_local_y) {
 	int max_height = 0;
 	for (HeightSortContributor &c : p_item->height_sort_contributors) {
@@ -863,29 +917,84 @@ int RendererCanvasCull::_sample_item_height(Item *p_item, real_t p_local_y) {
 	return max_height;
 }
 
+void RendererCanvasCull::_sort_heap_push(LocalVector<int> &heap, int value) {
+	heap.push_back(value);
+	int i = heap.size() - 1;
+	while (i > 0) {
+		int parent = (i - 1) / 2;
+		if (heap[parent] <= heap[i]) {
+			break;
+		}
+		SWAP(heap[parent], heap[i]);
+		i = parent;
+	}
+}
+
+int RendererCanvasCull::_sort_heap_pop(LocalVector<int> &heap) {
+	int min = heap[0];
+	heap[0] = heap[heap.size() - 1];
+	heap.resize(heap.size() - 1);
+	int i = 0;
+	while (true) {
+		int left = 2 * i + 1;
+		int right = 2 * i + 2;
+		int smallest = i;
+		if (left < (int)heap.size() && heap[left] < heap[smallest]) {
+			smallest = left;
+		}
+		if (right < (int)heap.size() && heap[right] < heap[smallest]) {
+			smallest = right;
+		}
+		if (smallest == i) {
+			break;
+		}
+		SWAP(heap[i], heap[smallest]);
+		i = smallest;
+	}
+	return min;
+}
+
+int RendererCanvasCull::_populate_valid_height_sort_indices(Item **p_y_sorted_items, int p_item_count, int *valid_indices) {
+	int valid_indices_count = 0;
+	for (int i = 0; i < p_item_count; i++) {
+		if (p_y_sorted_items[i]->sort_rect.has_area()) {
+			valid_indices[valid_indices_count++] = i;
+		}
+	}
+	return valid_indices_count;
+}
+
+// TODO: ? Maybe look into "sweep and prune" or grid-based optimizations for item overlap detection
 void RendererCanvasCull::_height_sort(Item **p_y_sorted_items, int p_item_count) {
 	_resolve_item_sort_rects(p_y_sorted_items, p_item_count);
+	_clear_height_sort_debug(p_y_sorted_items, p_item_count);
 
 	_sort_edges.clear();
-	_sort_indegree.resize(p_item_count);
-	memset(_sort_indegree.ptr(), 0, p_item_count * sizeof(int));
 	_sort_result.clear();
 	_sort_queue.clear();
-	Rect2 *transformed_rects = (Rect2 *)alloca(p_item_count * sizeof(Rect2));
 
-	for (int i = 0; i < p_item_count; i++) {
-		transformed_rects[i] = p_y_sorted_items[i]->ysort_xform.xform(p_y_sorted_items[i]->sort_rect);
-		if (Engine::get_singleton()->get_frames_drawn() == 4000 && transformed_rects[i].has_area()) {
-			print_line(p_y_sorted_items[i]->self);
-		}
+	_sort_indegree.resize(p_item_count);
+	memset(_sort_indegree.ptr(), 0, p_item_count * sizeof(int));
+
+	_sort_edge_offsets.resize(p_item_count + 1);
+	memset(_sort_edge_offsets.ptr(), 0, (p_item_count + 1) * sizeof(int));
+
+	int *valid_indices = (int *)alloca(p_item_count * sizeof(int));
+	int valid_indices_count = _populate_valid_height_sort_indices(p_y_sorted_items, p_item_count, valid_indices);
+	// if (Engine::get_singleton()->get_frames_drawn() % 1500 == 0) {
+	// 	print_line(valid_indices_count);
+	// }
+
+	Rect2 *transformed_rects = (Rect2 *)alloca(valid_indices_count * sizeof(Rect2));
+
+	for (int i = 0; i < valid_indices_count; i++) {
+		int item_index = valid_indices[i];
+		transformed_rects[i] = p_y_sorted_items[item_index]->ysort_xform.xform(p_y_sorted_items[item_index]->sort_rect);
 	}
 
 	// populate _sort_edges and _sort_indegree
-	for (int i = 0; i < p_item_count; i++) {
-		for (int j = i + 1; j < p_item_count; j++) {
-			Item *a = p_y_sorted_items[i];
-			Item *b = p_y_sorted_items[j];
-
+	for (int i = 0; i < valid_indices_count; i++) {
+		for (int j = i + 1; j < valid_indices_count; j++) {
 			Rect2 &rect_a = transformed_rects[i];
 			Rect2 &rect_b = transformed_rects[j];
 
@@ -893,7 +1002,13 @@ void RendererCanvasCull::_height_sort(Item **p_y_sorted_items, int p_item_count)
 				continue;
 			}
 
-			real_t shared_y_bottom = MIN(rect_a.get_end().y, rect_b.get_end().y);
+			int a_index = valid_indices[i];
+			int b_index = valid_indices[j];
+
+			Item *a = p_y_sorted_items[a_index];
+			Item *b = p_y_sorted_items[b_index];
+
+			real_t shared_y_bottom = MIN(rect_a.get_end().y, rect_b.get_end().y) - 1.0f;
 
 			real_t a_local_y = shared_y_bottom - a->ysort_xform.columns[2].y;
 			real_t b_local_y = shared_y_bottom - b->ysort_xform.columns[2].y;
@@ -902,21 +1017,50 @@ void RendererCanvasCull::_height_sort(Item **p_y_sorted_items, int p_item_count)
 			float b_height = _sample_item_height(b, b_local_y) + b->base_height;
 
 			if (a_height < b_height) {
-				_sort_edges.push_back({ i, j });
-				_sort_indegree[j]++;
+				_sort_edges.push_back({ a_index, b_index });
+				_sort_indegree[b_index]++;
 			} else if (b_height < a_height) {
-				_sort_edges.push_back({ j, i });
-				_sort_indegree[i]++;
+				_sort_edges.push_back({ b_index, a_index });
+				_sort_indegree[a_index]++;
+			}
+
+			// debug
+			if (a->height_sort_debug && b->height_sort_debug) {
+				real_t intersection_x = (MAX(rect_a.position.x, rect_b.position.x) +
+												MIN(rect_a.get_end().x, rect_b.get_end().x)) /
+						2.0f;
+
+				real_t local_x = intersection_x - a->ysort_xform.columns[2].x;
+				real_t local_y = shared_y_bottom - a->ysort_xform.columns[2].y;
+
+				a->height_sort_debug_data.push_back(local_x);
+				a->height_sort_debug_data.push_back(local_y);
+				if (rect_a.position.y <= rect_b.position.y) {
+					a->height_sort_debug_data.push_back(a_height);
+					a->height_sort_debug_data.push_back(b_height);
+				} else {
+					a->height_sort_debug_data.push_back(b_height);
+					a->height_sort_debug_data.push_back(a_height);
+				}
 			}
 		}
 	}
 
-	// khans algorithm with ysort priority queue
+	// populate _sort_edge_offsets
+	_sort_edges.sort();
+	for (uint32_t i = 0; i < _sort_edges.size(); i++) {
+		_sort_edge_offsets[_sort_edges[i].from + 1]++;
+	}
+	for (int i = 1; i <= p_item_count; i++) {
+		_sort_edge_offsets[i] += _sort_edge_offsets[i - 1];
+	}
+
+	// kahns algorithm with ysort priority queue
 
 	// initialize queue with all nodes that have indegree 0
 	for (int i = 0; i < p_item_count; i++) {
 		if (_sort_indegree[i] == 0) {
-			_sort_queue.push_back(i);
+			_sort_heap_push(_sort_queue, i);
 		}
 	}
 
@@ -924,43 +1068,28 @@ void RendererCanvasCull::_height_sort(Item **p_y_sorted_items, int p_item_count)
 		if (_sort_queue.is_empty()) {
 			// cycle detected - greedy break
 			// find lowest index node with indegree > 0
-			int best = -1;
 			for (int i = 0; i < p_item_count; i++) {
 				if (_sort_indegree[i] > 0) {
-					best = i;
+					_sort_indegree[i] = 0;
+					_sort_heap_push(_sort_queue, i);
 					break;
 				}
 			}
-			ERR_FAIL_COND_MSG(best == -1, "Shouldnt happen :(");
-			_sort_indegree[best] = 0;
-			_sort_queue.push_back(best);
 			continue;
 		}
 
-
 		// find lowest index in queue
-		uint32_t best_queue_index = 0;
-		for (uint32_t i = 1; i < _sort_queue.size(); i++) {
-			if (_sort_queue[i] < _sort_queue[best_queue_index]) {
-				best_queue_index = i;
-			}
-		}
 
-		int item_index = _sort_queue[best_queue_index];
-		_sort_queue.remove_at_unordered(best_queue_index);
+		int item_index = _sort_heap_pop(_sort_queue);
 		_sort_result.push_back(item_index);
 
-		for (uint32_t i = 0; i < _sort_edges.size(); i++) {
-			if (_sort_edges[i].from == item_index) {
-				int dependant_index = _sort_edges[i].to;
-				_sort_indegree[dependant_index]--;
-				if (_sort_indegree[dependant_index] == 0) {
-					_sort_queue.push_back(dependant_index);
-				}
+		for (int i = _sort_edge_offsets[item_index]; i < _sort_edge_offsets[item_index + 1]; i++) {
+			int dependant_index = _sort_edges[i].to;
+			_sort_indegree[dependant_index]--;
+			if (_sort_indegree[dependant_index] == 0) {
+				_sort_heap_push(_sort_queue, dependant_index);
 			}
 		}
-
-
 	}
 
 	Item **sorted_copy = (Item **)alloca(p_item_count * sizeof(Item *));
