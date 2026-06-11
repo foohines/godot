@@ -996,6 +996,8 @@ public:
 	FUNC3(canvas_item_set_height_sort_frame, RID, RID, int)
 	FUNC3(canvas_item_set_height_sort_offset, RID, RID, Vector2)
 	FUNC3(canvas_item_set_height_sort_flip_h, RID, RID, bool)
+	FUNC3(canvas_item_set_height_sort_override, RID, Rect2, float)
+	FUNC1(canvas_item_remove_height_sort_override, RID)
 	FUNC1R(Rect2, canvas_item_get_sort_rect, RID)
 
 	FUNC2(canvas_item_set_height_sort_debug, RID, bool)
@@ -1004,6 +1006,7 @@ public:
 	
 
 	FUNC2(canvas_item_set_is_player, RID, bool)
+	// FUNC2(canvas_item_set_name, RID, StringName)
 
 	FUNC6(canvas_item_add_line, RID, const Point2 &, const Point2 &, const Color &, float, bool)
 	FUNC5(canvas_item_add_polyline, RID, const Vector<Point2> &, const Vector<Color> &, float, bool)

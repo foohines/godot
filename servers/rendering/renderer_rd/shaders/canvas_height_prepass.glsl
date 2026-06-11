@@ -86,7 +86,7 @@ void main() {
     // float local_height = texture(sampler2D(height_texture, texture_sampler), uv_interp).r * 255.0;
     
     
-    if (alpha < 0.8) {
+    if (alpha < 0.99) {
         discard;
     }
 

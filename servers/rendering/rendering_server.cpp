@@ -3372,12 +3372,16 @@ void RenderingServer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("canvas_item_set_height_sort_flip_h", "item", "contributor_item", "flip_h"), &RenderingServer::canvas_item_set_height_sort_flip_h);
 	ClassDB::bind_method(D_METHOD("canvas_item_get_sort_rect", "item"), &RenderingServer::canvas_item_get_sort_rect);
 
+	ClassDB::bind_method(D_METHOD("canvas_item_set_height_sort_override", "item", "rect", "height"), &RenderingServer::canvas_item_set_height_sort_override);
+	ClassDB::bind_method(D_METHOD("canvas_item_remove_height_sort_override", "item"), &RenderingServer::canvas_item_remove_height_sort_override);
+
 	ClassDB::bind_method(D_METHOD("canvas_item_set_height_sort_debug", "item", "enabled"), &RenderingServer::canvas_item_set_height_sort_debug);
 	ClassDB::bind_method(D_METHOD("canvas_item_get_height_sort_debug_data", "item"), &RenderingServer::canvas_item_get_height_sort_debug_data);
 
 	/* Primitives */
 
 	ClassDB::bind_method(D_METHOD("canvas_item_set_is_player", "item", "is_player"), &RenderingServer::canvas_item_set_is_player);
+	// ClassDB::bind_method(D_METHOD("canvas_item_set_name", "item", "name"), &RenderingServer::canvas_item_set_name);
 
 	ClassDB::bind_method(D_METHOD("canvas_item_add_line", "item", "from", "to", "color", "width", "antialiased"), &RenderingServer::canvas_item_add_line, DEFVAL(-1.0), DEFVAL(false));
 	ClassDB::bind_method(D_METHOD("canvas_item_add_polyline", "item", "points", "colors", "width", "antialiased"), &RenderingServer::canvas_item_add_polyline, DEFVAL(-1.0), DEFVAL(false));

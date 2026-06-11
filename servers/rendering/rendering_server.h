@@ -208,6 +208,8 @@ public:
 	virtual void canvas_item_set_height_sort_frame(RID p_item, RID p_contributor_item, int p_frame) = 0;
 	virtual void canvas_item_set_height_sort_offset(RID p_item, RID p_contributor_item, Vector2 p_local_offset) = 0;
 	virtual void canvas_item_set_height_sort_flip_h(RID p_item, RID p_contributor_item, bool p_flip_h) = 0;
+	virtual void canvas_item_set_height_sort_override(RID p_item, Rect2 p_sort_rect, float p_height) = 0;
+	virtual void canvas_item_remove_height_sort_override(RID p_item) = 0;
 	virtual Rect2 canvas_item_get_sort_rect(RID p_item) = 0;
 
 	virtual void canvas_item_set_height_sort_debug(RID p_item, bool p_enabled) = 0;
@@ -1593,6 +1595,8 @@ public:
 	virtual void canvas_item_set_use_identity_transform(RID p_item, bool p_enabled) = 0;
 	virtual void canvas_item_set_height_occlusion_enabled(RID p_item, bool p_enabled) = 0;
 	virtual void canvas_item_set_base_height(RID p_item, float p_base_height) = 0;
+
+	// virtual void canvas_item_set_name(RID p_item, StringName p_name) = 0;
 
 	enum NinePatchAxisMode {
 		NINE_PATCH_STRETCH,

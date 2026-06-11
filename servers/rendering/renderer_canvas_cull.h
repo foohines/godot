@@ -50,6 +50,8 @@ public:
 	struct HeightSortEdge {
     	int from;
     	int to;
+		// StringName from_name;
+		// StringName to_name;
 		bool operator<(const HeightSortEdge &p_other) const {
 			return from < p_other.from;
 		}
@@ -82,6 +84,11 @@ public:
 			if (y < 0 || y >= height_sort->frame_size.y) {
 				return 0;
 			}
+
+			if (y == height_sort->tight_rects[current_frame].position.y - 1) {
+				y++;
+			}
+
 			return height_sort->y_to_height[current_frame * height_sort->frame_size.y + y];
 		}
 	};
@@ -106,6 +113,8 @@ public:
 		int ysort_parent_abs_z_index; // Absolute Z index of parent. Only populated and used when y-sorting.
 		uint32_t visibility_layer = 0xffffffff;
 		bool is_player = false;
+		
+		// StringName name;
 
 		LocalVector<HeightSortContributor> height_sort_contributors;
 		Rect2 sort_rect;
@@ -113,6 +122,12 @@ public:
 
 		bool height_sort_debug = false;
 		LocalVector<float> height_sort_debug_data;
+
+		struct HeightSortOverride {
+			bool enabled = false;
+			Rect2 sort_rect;
+			float height = 0.0f;
+		} sort_override;
 
 		Vector<Item *> child_items;
 
@@ -293,6 +308,8 @@ public:
 	void canvas_item_set_parent(RID p_item, RID p_parent);
 	void canvas_item_set_is_player(RID p_item, bool p_is_player);
 
+	// void canvas_item_set_name(RID p_item, StringName p_name);
+
 	void canvas_item_set_visible(RID p_item, bool p_visible);
 	void canvas_item_set_light_mask(RID p_item, int p_mask);
 
@@ -454,6 +471,8 @@ public:
 	void canvas_item_set_height_sort_frame(RID p_item, RID p_contributor_item, int p_frame);
 	void canvas_item_set_height_sort_offset(RID p_item, RID p_contributor_item, Vector2 p_local_offset);
 	void canvas_item_set_height_sort_flip_h(RID p_item, RID p_contributor_item, bool p_flip_h);
+	void canvas_item_set_height_sort_override(RID p_item, Rect2 p_sort_rect, float p_height);
+	void canvas_item_remove_height_sort_override(RID p_item);
 
 	Rect2 canvas_item_get_sort_rect(RID p_item);
 
@@ -468,7 +487,11 @@ private:
 	LocalVector<int> _sort_indegree;
 	LocalVector<int> _sort_queue;
 	LocalVector<int> _sort_result;
-	LocalVector<int> _sort_edge_offsets; 
+	LocalVector<int> _sort_edge_offsets;
+
+	LocalVector<uint8_t> _cycle_state;
+	LocalVector<int> _cycle_dfs_node;
+	LocalVector<int> _cycle_dfs_edge;
 
 
 	void _resolve_item_sort_rect(Item &p_item);
@@ -479,6 +502,9 @@ private:
 	void _sort_heap_push(LocalVector<int> &heap, int value);
 	int _sort_heap_pop(LocalVector<int> &heap);
 	void _clear_height_sort_debug(Item **p_y_sorted_items, int p_item_count);
+	int _find_cycle_node(int p_item_count);
+
+	bool _is_node_in_cycle(int p_node, int p_item_count);
 	
 
 	/* INTERPOLATION */

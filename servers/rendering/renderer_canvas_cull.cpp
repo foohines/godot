@@ -575,6 +575,12 @@ void RendererCanvasCull::canvas_item_set_is_player(RID p_item, bool p_is_player)
 	canvas_item->is_player = p_is_player;
 }
 
+// void RendererCanvasCull::canvas_item_set_name(RID p_item, StringName p_name) {
+// 	Item *canvas_item = canvas_item_owner.get_or_null(p_item);
+// 	ERR_FAIL_NULL(canvas_item);
+// 	canvas_item->name = p_name;
+// }
+
 RID RendererCanvasCull::canvas_item_allocate() {
 	return canvas_item_owner.allocate_rid();
 }
@@ -851,6 +857,24 @@ void RendererCanvasCull::canvas_item_set_height_sort_flip_h(RID p_item, RID p_co
 	}
 }
 
+void RendererCanvasCull::canvas_item_set_height_sort_override(RID p_item, Rect2 p_sort_rect, float p_height) {
+	Item *canvas_item = canvas_item_owner.get_or_null(p_item);
+	ERR_FAIL_NULL(canvas_item);
+	canvas_item->sort_override.enabled = true;
+	canvas_item->sort_override.sort_rect = p_sort_rect;
+	canvas_item->sort_override.height = p_height;
+	canvas_item->sort_rect_dirty = true;
+
+}
+void RendererCanvasCull::canvas_item_remove_height_sort_override(RID p_item) {
+	Item *canvas_item = canvas_item_owner.get_or_null(p_item);
+	ERR_FAIL_NULL(canvas_item);
+
+	canvas_item->sort_override.enabled = false;
+	canvas_item->sort_rect_dirty = true;
+
+}
+
 Rect2 RendererCanvasCull::canvas_item_get_sort_rect(RID p_item) {
 	Item *canvas_item = canvas_item_owner.get_or_null(p_item);
 	ERR_FAIL_NULL_V(canvas_item, Rect2());
@@ -862,7 +886,7 @@ void RendererCanvasCull::canvas_item_set_height_sort_debug(RID p_item, bool p_en
 	Item *canvas_item = canvas_item_owner.get_or_null(p_item);
 	ERR_FAIL_NULL(canvas_item);
 
-	canvas_item->height_sort_debug = true;
+	canvas_item->height_sort_debug = p_enabled;
 }
 
 PackedFloat32Array RendererCanvasCull::canvas_item_get_height_sort_debug_data(RID p_item) {
@@ -878,6 +902,12 @@ PackedFloat32Array RendererCanvasCull::canvas_item_get_height_sort_debug_data(RI
 }
 
 void RendererCanvasCull::_resolve_item_sort_rect(Item &p_item) {
+	if (p_item.sort_override.enabled) {
+		p_item.sort_rect = p_item.sort_override.sort_rect;
+		p_item.sort_rect_dirty = false;
+		return;
+	}
+
 	if (p_item.height_sort_contributors.is_empty()) {
 		p_item.sort_rect = Rect2();
 	} else {
@@ -909,10 +939,14 @@ void RendererCanvasCull::_clear_height_sort_debug(Item **p_y_sorted_items, int p
 }
 
 int RendererCanvasCull::_sample_item_height(Item *p_item, real_t p_local_y) {
+	if (p_item->sort_override.enabled) {
+		return p_item->sort_override.height;
+	}
+	
 	int max_height = 0;
-	for (HeightSortContributor &c : p_item->height_sort_contributors) {
-		int h = c.sample_height(p_local_y);
-		max_height = MAX(max_height, h);
+	for (HeightSortContributor &contributor : p_item->height_sort_contributors) {
+		int height = contributor.sample_height(p_local_y);
+		max_height = MAX(max_height, height);
 	}
 	return max_height;
 }
@@ -962,6 +996,65 @@ int RendererCanvasCull::_populate_valid_height_sort_indices(Item **p_y_sorted_it
 		}
 	}
 	return valid_indices_count;
+}
+
+
+int RendererCanvasCull::_find_cycle_node(int p_item_count) {
+    // state: 0 = unvisited, 1 = on current path, 2 = fully explored
+    _cycle_state.resize(p_item_count);
+    memset(_cycle_state.ptr(), 0, p_item_count * sizeof(uint8_t));
+
+    _cycle_dfs_node.clear();
+    _cycle_dfs_edge.clear();
+
+    for (int start = 0; start < p_item_count; start++) {
+        // skip already-processed nodes and already-explored nodes
+        if (_sort_indegree[start] == 0 || _cycle_state[start] != 0) {
+            continue;
+        }
+
+        _cycle_dfs_node.push_back(start);
+        _cycle_dfs_edge.push_back(_sort_edge_offsets[start]);
+        _cycle_state[start] = 1; // on path
+
+        while (!_cycle_dfs_node.is_empty()) {
+            int node = _cycle_dfs_node[_cycle_dfs_node.size() - 1];
+            int &edge_cursor = _cycle_dfs_edge[_cycle_dfs_edge.size() - 1];
+
+            bool descended = false;
+            while (edge_cursor < _sort_edge_offsets[node + 1]) {
+                int neighbour = _sort_edges[edge_cursor].to;
+                edge_cursor++;
+
+                // ignore edges to already-processed nodes
+                if (_sort_indegree[neighbour] == 0) {
+                    continue;
+                }
+
+                if (_cycle_state[neighbour] == 1) {
+                    // neighbour is on current path - found a cycle
+                    return neighbour;
+                }
+
+                if (_cycle_state[neighbour] == 0) {
+                    _cycle_state[neighbour] = 1;
+                    _cycle_dfs_node.push_back(neighbour);
+                    _cycle_dfs_edge.push_back(_sort_edge_offsets[neighbour]);
+                    descended = true;
+                    break;
+                }
+            }
+
+            if (!descended) {
+                // done with this node, pop it off the path
+                _cycle_state[node] = 2;
+                _cycle_dfs_node.remove_at(_cycle_dfs_node.size() - 1);
+                _cycle_dfs_edge.remove_at(_cycle_dfs_edge.size() - 1);
+            }
+        }
+    }
+
+    return -1;
 }
 
 // TODO: ? Maybe look into "sweep and prune" or grid-based optimizations for item overlap detection
@@ -1066,15 +1159,19 @@ void RendererCanvasCull::_height_sort(Item **p_y_sorted_items, int p_item_count)
 
 	while (_sort_result.size() < (uint32_t)p_item_count) {
 		if (_sort_queue.is_empty()) {
-			// cycle detected - greedy break
-			// find lowest index node with indegree > 0
-			for (int i = 0; i < p_item_count; i++) {
-				if (_sort_indegree[i] > 0) {
-					_sort_indegree[i] = 0;
-					_sort_heap_push(_sort_queue, i);
-					break;
-				}
-			}
+			// cycle detected
+
+			// for (int i = 0; i < _sort_edges.size(); i++) {
+			// 	HeightSortEdge &edge = _sort_edges[i];
+			// 	print_line(edge.from_name, " -> ", edge.to_name);
+
+			// }
+
+			
+			int cycle_node = _find_cycle_node(p_item_count);
+			ERR_FAIL_COND(cycle_node == -1); // queue empty but no cycle = logic error
+			_sort_indegree[cycle_node] = 0;
+			_sort_heap_push(_sort_queue, cycle_node);
 			continue;
 		}
 
