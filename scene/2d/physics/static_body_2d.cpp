@@ -138,11 +138,10 @@ void StaticBody2D::navmesh_parse_source_geometry(const Ref<NavigationPolygon> &p
 			}
 
 			const Transform2D static_body_xform = p_source_geometry_data->root_node_transform * static_body->get_global_transform() * static_body->shape_owner_get_transform(shape_owner);
+			Vector<Vector2> shape_outline;
 
 			RectangleShape2D *rectangle_shape = Object::cast_to<RectangleShape2D>(*s);
 			if (rectangle_shape) {
-				Vector<Vector2> shape_outline;
-
 				const Vector2 &rectangle_size = rectangle_shape->get_size();
 
 				shape_outline.resize(5);
@@ -151,13 +150,6 @@ void StaticBody2D::navmesh_parse_source_geometry(const Ref<NavigationPolygon> &p
 				shape_outline.write[2] = static_body_xform.xform(rectangle_size * 0.5);
 				shape_outline.write[3] = static_body_xform.xform(Vector2(-rectangle_size.x, rectangle_size.y) * 0.5);
 				shape_outline.write[4] = static_body_xform.xform(-rectangle_size * 0.5);
-
-				
-				if (navigation_geometry_type == NavigationPolygon::NAVIGATION_GEOMETRY_OBSTRUCTION) {
-					p_source_geometry_data->add_obstruction_outline(shape_outline);
-				} else {
-					p_source_geometry_data->add_traversable_outline(shape_outline);
-				}
 			}
 
 			CapsuleShape2D *capsule_shape = Object::cast_to<CapsuleShape2D>(*s);
@@ -165,7 +157,6 @@ void StaticBody2D::navmesh_parse_source_geometry(const Ref<NavigationPolygon> &p
 				const real_t capsule_height = capsule_shape->get_height();
 				const real_t capsule_radius = capsule_shape->get_radius();
 
-				Vector<Vector2> shape_outline;
 				const real_t turn_step = Math::TAU / 12.0;
 				shape_outline.resize(14);
 				int shape_outline_inx = 0;
@@ -179,19 +170,12 @@ void StaticBody2D::navmesh_parse_source_geometry(const Ref<NavigationPolygon> &p
 						shape_outline_inx += 1;
 					}
 				}
-
-				if (navigation_geometry_type == NavigationPolygon::NAVIGATION_GEOMETRY_OBSTRUCTION) {
-					p_source_geometry_data->add_obstruction_outline(shape_outline);
-				} else {
-					p_source_geometry_data->add_traversable_outline(shape_outline);
-				}
 			}
 
 			CircleShape2D *circle_shape = Object::cast_to<CircleShape2D>(*s);
 			if (circle_shape) {
 				const real_t circle_radius = circle_shape->get_radius();
 
-				Vector<Vector2> shape_outline;
 				int circle_edge_count = 12;
 				shape_outline.resize(circle_edge_count);
 
@@ -199,41 +183,42 @@ void StaticBody2D::navmesh_parse_source_geometry(const Ref<NavigationPolygon> &p
 				for (int i = 0; i < circle_edge_count; i++) {
 					shape_outline.write[i] = static_body_xform.xform(Vector2(Math::cos(i * turn_step), Math::sin(i * turn_step)) * circle_radius);
 				}
-
-				if (navigation_geometry_type == NavigationPolygon::NAVIGATION_GEOMETRY_OBSTRUCTION) {
-					p_source_geometry_data->add_obstruction_outline(shape_outline);
-				} else {
-					p_source_geometry_data->add_traversable_outline(shape_outline);
-				}
 			}
 
 			ConcavePolygonShape2D *concave_polygon_shape = Object::cast_to<ConcavePolygonShape2D>(*s);
 			if (concave_polygon_shape) {
-				Vector<Vector2> shape_outline = concave_polygon_shape->get_segments();
+				shape_outline = concave_polygon_shape->get_segments();
 
 				for (int i = 0; i < shape_outline.size(); i++) {
 					shape_outline.write[i] = static_body_xform.xform(shape_outline[i]);
-				}
-
-				if (navigation_geometry_type == NavigationPolygon::NAVIGATION_GEOMETRY_OBSTRUCTION) {
-					p_source_geometry_data->add_obstruction_outline(shape_outline);
-				} else {
-					p_source_geometry_data->add_traversable_outline(shape_outline);
 				}
 			}
 
 			ConvexPolygonShape2D *convex_polygon_shape = Object::cast_to<ConvexPolygonShape2D>(*s);
 			if (convex_polygon_shape) {
-				Vector<Vector2> shape_outline = convex_polygon_shape->get_points();
+				shape_outline = convex_polygon_shape->get_points();
 
 				for (int i = 0; i < shape_outline.size(); i++) {
 					shape_outline.write[i] = static_body_xform.xform(shape_outline[i]);
 				}
+			}
 
-				if (navigation_geometry_type == NavigationPolygon::NAVIGATION_GEOMETRY_OBSTRUCTION) {
-					p_source_geometry_data->add_obstruction_outline(shape_outline);
-				} else {
-					p_source_geometry_data->add_traversable_outline(shape_outline);
+			if (shape_outline.size()) {
+				switch (navigation_geometry_type) {
+					case NavigationPolygon::NAVIGATION_GEOMETRY_OBSTRUCTION:
+						p_source_geometry_data->add_obstruction_outline(shape_outline);
+
+						break;
+					case NavigationPolygon::NAVIGATION_GEOMETRY_TRAVERSABLE:
+						p_source_geometry_data->add_traversable_outline(shape_outline);
+						break;
+					case NavigationPolygon::NAVIGATION_GEOMETRY_BOTH:
+						if (p_navigation_mesh->get_obstruction_collision_mask() & static_body->get_collision_layer()) {
+							p_source_geometry_data->add_obstruction_outline(shape_outline);
+						} else {
+							p_source_geometry_data->add_traversable_outline(shape_outline);
+						}
+						break;
 				}
 			}
 		}

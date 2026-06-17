@@ -114,6 +114,7 @@ public:
 		LocalVector<Vector2> path_points;
 		LocalVector<int32_t> path_meta_point_types;
 		LocalVector<RID> path_meta_point_rids;
+		LocalVector<RID> path_meta_map_rids;
 		LocalVector<int64_t> path_meta_point_owners;
 		float path_length = 0.0;
 
@@ -126,6 +127,7 @@ public:
 			path_points.clear();
 			path_meta_point_types.clear();
 			path_meta_point_rids.clear();
+			path_meta_map_rids.clear();
 			path_meta_point_owners.clear();
 		}
 
@@ -133,6 +135,7 @@ public:
 			path_points.reverse();
 			path_meta_point_types.reverse();
 			path_meta_point_rids.reverse();
+			path_meta_map_rids.reverse();
 			path_meta_point_owners.reverse();
 		}
 	};
@@ -153,7 +156,7 @@ public:
 	static void map_query_path(NavMap2D *p_map, NavMap2D *p_destination_map, const Ref<NavigationPathQueryParameters2D> &p_query_parameters, Ref<NavigationPathQueryResult2D> p_query_result, const Callable &p_callback);
 
 	static void query_task_map_iteration_get_path(NavMeshPathQueryTask2D &p_query_task, AHashMap<NavMap2D*, PathQueryMapData> &maps_to_path_query_map_data);
-	static void _query_task_push_back_point_with_metadata(NavMeshPathQueryTask2D &p_query_task, const Vector2 &p_point, const Nav2D::Polygon *p_point_polygon);
+	static void _query_task_push_back_point_with_metadata(NavMeshPathQueryTask2D &p_query_task, const Vector2 &p_point, const Nav2D::Polygon *p_point_polygon, AHashMap<NavMap2D *, PathQueryMapData> &maps_to_path_query_map_data);
 	static void _query_task_find_start_end_positions(NavMeshPathQueryTask2D &p_query_task, AHashMap<NavMap2D*, PathQueryMapData> &maps_to_path_query_map_data);
 	static PolygonPositionResult _query_task_find_polygon_for_position(NavMeshPathQueryTask2D &p_query_task, NavMapIteration2D &map_iteration, Vector2 &position);
 	static void _query_task_build_path_corridor(NavMeshPathQueryTask2D &p_query_task, AHashMap<NavMap2D*, PathQueryMapData> &maps_to_path_query_map_data);
@@ -172,4 +175,5 @@ public:
 	static LocalVector<uint32_t> get_simplified_path_indices(const LocalVector<Vector2> &p_path, real_t p_epsilon);
 
 	static float _calculate_path_length(const LocalVector<Vector2> &p_path, uint32_t p_start_index, uint32_t p_end_index);
+	static RID _resolve_point_map_rid(const Nav2D::Polygon *p_point_polygon, AHashMap<NavMap2D *, PathQueryMapData> &maps_to_path_query_map_data);
 };

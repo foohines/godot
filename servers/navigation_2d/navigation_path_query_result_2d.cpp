@@ -54,6 +54,15 @@ TypedArray<RID> NavigationPathQueryResult2D::get_path_rids() const {
 	return path_rids;
 }
 
+void NavigationPathQueryResult2D::set_map_rids(const TypedArray<RID> &p_map_rids) {
+	map_rids = p_map_rids;
+}
+
+TypedArray<RID> NavigationPathQueryResult2D::get_map_rids() const {
+	return map_rids;
+}
+
+
 void NavigationPathQueryResult2D::set_path_owner_ids(const Vector<int64_t> &p_path_owner_ids) {
 	path_owner_ids = p_path_owner_ids;
 }
@@ -66,13 +75,15 @@ void NavigationPathQueryResult2D::reset() {
 	path.clear();
 	path_types.clear();
 	path_rids.clear();
+	map_rids.clear();
 	path_owner_ids.clear();
 }
 
-void NavigationPathQueryResult2D::set_data(const LocalVector<Vector2> &p_path, const LocalVector<int32_t> &p_path_types, const LocalVector<RID> &p_path_rids, const LocalVector<int64_t> &p_path_owner_ids) {
+void NavigationPathQueryResult2D::set_data(const LocalVector<Vector2> &p_path, const LocalVector<int32_t> &p_path_types, const LocalVector<RID> &p_path_rids, const LocalVector<RID> &p_map_rids, const LocalVector<int64_t> &p_path_owner_ids) {
 	path.clear();
 	path_types.clear();
 	path_rids.clear();
+	map_rids.clear();
 	path_owner_ids.clear();
 
 	{
@@ -97,6 +108,13 @@ void NavigationPathQueryResult2D::set_data(const LocalVector<Vector2> &p_path, c
 		path_rids.resize(p_path_rids.size());
 		for (uint32_t i = 0; i < p_path_rids.size(); i++) {
 			path_rids[i] = p_path_rids[i];
+		}
+	}
+	
+	{
+		map_rids.resize(p_map_rids.size());
+		for (uint32_t i = 0; i < p_map_rids.size(); i++) {
+			map_rids[i] = p_map_rids[i];
 		}
 	}
 
@@ -127,6 +145,9 @@ void NavigationPathQueryResult2D::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("set_path_rids", "path_rids"), &NavigationPathQueryResult2D::set_path_rids);
 	ClassDB::bind_method(D_METHOD("get_path_rids"), &NavigationPathQueryResult2D::get_path_rids);
+	
+	ClassDB::bind_method(D_METHOD("set_map_rids", "map_rids"), &NavigationPathQueryResult2D::set_map_rids);
+	ClassDB::bind_method(D_METHOD("get_map_rids"), &NavigationPathQueryResult2D::get_map_rids);
 
 	ClassDB::bind_method(D_METHOD("set_path_owner_ids", "path_owner_ids"), &NavigationPathQueryResult2D::set_path_owner_ids);
 	ClassDB::bind_method(D_METHOD("get_path_owner_ids"), &NavigationPathQueryResult2D::get_path_owner_ids);
@@ -139,6 +160,7 @@ void NavigationPathQueryResult2D::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::PACKED_VECTOR2_ARRAY, "path"), "set_path", "get_path");
 	ADD_PROPERTY(PropertyInfo(Variant::PACKED_INT32_ARRAY, "path_types"), "set_path_types", "get_path_types");
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "path_rids", PROPERTY_HINT_ARRAY_TYPE, "RID"), "set_path_rids", "get_path_rids");
+	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "map_rids", PROPERTY_HINT_ARRAY_TYPE, "RID"), "set_map_rids", "get_map_rids");
 	ADD_PROPERTY(PropertyInfo(Variant::PACKED_INT64_ARRAY, "path_owner_ids"), "set_path_owner_ids", "get_path_owner_ids");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "path_length"), "set_path_length", "get_path_length");
 

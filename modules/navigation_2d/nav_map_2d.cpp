@@ -143,9 +143,15 @@ LocalVector<NavMapIterationRead2D> NavMap2D::get_linked_map_iteration_locks() {
 
 	to_visit.push_back(this);
 
+
 	while (to_visit.size()) {
 		NavMap2D* map = to_visit[to_visit.size() - 1];
 		to_visit.remove_at(to_visit.size() - 1);
+
+		if (visited.has(map)) {
+			continue;
+		}
+		
 		visited.insert(map);
 
 		iteration_locks.push_back(map->get_current_iteration_read_lock());

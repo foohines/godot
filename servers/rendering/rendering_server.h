@@ -1836,10 +1836,13 @@ public:
 		RENDERING_INFO_PIPELINE_COMPILATIONS_SURFACE,
 		RENDERING_INFO_PIPELINE_COMPILATIONS_DRAW,
 		RENDERING_INFO_PIPELINE_COMPILATIONS_SPECIALIZATION,
+		RENDERING_INFO_SORT_DEBUG_HEIGHT_A,
+		RENDERING_INFO_SORT_DEBUG_HEIGHT_B,
 		RENDERING_INFO_MAX
 	};
 
 	virtual uint64_t get_rendering_info(RenderingInfo p_info) = 0;
+	virtual float get_sort_debug_info(RenderingInfo p_info) = 0;
 	virtual String get_video_adapter_name() const = 0;
 	virtual String get_video_adapter_vendor() const = 0;
 	virtual RenderingDevice::DeviceType get_video_adapter_type() const = 0;

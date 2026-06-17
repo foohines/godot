@@ -479,6 +479,9 @@ public:
 	void canvas_item_set_height_sort_debug(RID p_item, bool p_enabled);
 	PackedFloat32Array canvas_item_get_height_sort_debug_data(RID p_item);
 
+	inline static float height_sort_debug_height_a = 0.0f;
+	inline static float height_sort_debug_height_b = 0.0f;
+
 
 private:
 	AHashMap<RID, HeightSort*> height_sort_cache;
@@ -492,6 +495,7 @@ private:
 	LocalVector<uint8_t> _cycle_state;
 	LocalVector<int> _cycle_dfs_node;
 	LocalVector<int> _cycle_dfs_edge;
+
 
 
 	void _resolve_item_sort_rect(Item &p_item);

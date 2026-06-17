@@ -1131,9 +1131,15 @@ void RendererCanvasCull::_height_sort(Item **p_y_sorted_items, int p_item_count)
 				if (rect_a.position.y <= rect_b.position.y) {
 					a->height_sort_debug_data.push_back(a_height);
 					a->height_sort_debug_data.push_back(b_height);
+
+					height_sort_debug_height_a = a_height;
+					height_sort_debug_height_b = b_height;
 				} else {
 					a->height_sort_debug_data.push_back(b_height);
 					a->height_sort_debug_data.push_back(a_height);
+
+					height_sort_debug_height_a = b_height;
+					height_sort_debug_height_b = a_height;
 				}
 			}
 		}

@@ -170,6 +170,8 @@ String Performance::get_monitor_name(Monitor p_monitor) const {
 		PNAME("memory/static"),
 		PNAME("memory/static_max"),
 		PNAME("memory/msg_buf_max"),
+		"Sort/Height 1",
+		"Sort/Height 2",
 		PNAME("object/objects"),
 		PNAME("object/resources"),
 		PNAME("object/nodes"),
@@ -282,6 +284,11 @@ double Performance::get_monitor(Monitor p_monitor) const {
 			return RS::get_singleton()->get_rendering_info(RS::RENDERING_INFO_PIPELINE_COMPILATIONS_DRAW);
 		case PIPELINE_COMPILATIONS_SPECIALIZATION:
 			return RS::get_singleton()->get_rendering_info(RS::RENDERING_INFO_PIPELINE_COMPILATIONS_SPECIALIZATION);
+		case SORT_DEBUG_HEIGHT_A:
+			return RS::get_singleton()->get_sort_debug_info(RS::RENDERING_INFO_SORT_DEBUG_HEIGHT_A) / 1000.0f;
+		case SORT_DEBUG_HEIGHT_B:
+			return RS::get_singleton()->get_sort_debug_info(RS::RENDERING_INFO_SORT_DEBUG_HEIGHT_B) / 1000.0f;
+
 #ifndef PHYSICS_2D_DISABLED
 		case PHYSICS_2D_ACTIVE_OBJECTS:
 			return PhysicsServer2D::get_singleton()->get_process_info(PhysicsServer2D::INFO_ACTIVE_OBJECTS);
@@ -471,6 +478,8 @@ Performance::MonitorType Performance::get_monitor_type(Monitor p_monitor) const 
 		MONITOR_TYPE_MEMORY,
 		MONITOR_TYPE_MEMORY,
 		MONITOR_TYPE_MEMORY,
+		MONITOR_TYPE_TIME,
+		MONITOR_TYPE_TIME,
 		MONITOR_TYPE_QUANTITY,
 		MONITOR_TYPE_QUANTITY,
 		MONITOR_TYPE_QUANTITY,

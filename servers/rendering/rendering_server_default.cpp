@@ -318,6 +318,18 @@ uint64_t RenderingServerDefault::get_rendering_info(RenderingInfo p_info) {
 	return RSG::utilities->get_rendering_info(p_info);
 }
 
+float RenderingServerDefault::get_sort_debug_info(RenderingInfo p_info) {
+	if (p_info == RENDERING_INFO_SORT_DEBUG_HEIGHT_A) {
+		return RSG::canvas->height_sort_debug_height_a;
+	} else if (p_info == RENDERING_INFO_SORT_DEBUG_HEIGHT_B) {
+		return RSG::canvas->height_sort_debug_height_b;;
+	}
+
+	return 0.0f;
+}
+
+
+
 RenderingDevice::DeviceType RenderingServerDefault::get_video_adapter_type() const {
 	return RSG::utilities->get_video_adapter_type();
 }

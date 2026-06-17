@@ -94,6 +94,7 @@ public:
 	enum NavigationGeometryType {
 		NAVIGATION_GEOMETRY_OBSTRUCTION = 0,
 		NAVIGATION_GEOMETRY_TRAVERSABLE,
+		NAVIGATION_GEOMETRY_BOTH,
 		NAVIGATION_GEOMETRY_MAX
 	};
 
@@ -102,7 +103,10 @@ public:
 
 	SamplePartitionType partition_type = SAMPLE_PARTITION_CONVEX_PARTITION;
 	ParsedGeometryType parsed_geometry_type = PARSED_GEOMETRY_BOTH;
+
 	uint32_t parsed_collision_mask = 0xFFFFFFFF;
+	uint32_t obstruction_collision_mask = 0x00000000;
+	uint32_t traversable_collision_mask = 0x00000000;
 
 	SourceGeometryMode source_geometry_mode = SOURCE_GEOMETRY_ROOT_NODE_CHILDREN;
 	NavigationGeometryType navigation_geometry_type = NAVIGATION_GEOMETRY_OBSTRUCTION;
@@ -145,6 +149,12 @@ public:
 
 	void set_parsed_collision_mask(uint32_t p_mask);
 	uint32_t get_parsed_collision_mask() const;
+
+	void set_obstruction_collision_mask(uint32_t p_mask);
+	uint32_t get_obstruction_collision_mask() const;
+
+	void set_traversable_collision_mask(uint32_t p_mask);
+	uint32_t get_traversable_collision_mask() const;
 
 	void set_parsed_collision_mask_value(int p_layer_number, bool p_value);
 	bool get_parsed_collision_mask_value(int p_layer_number) const;

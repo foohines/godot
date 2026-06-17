@@ -186,6 +186,9 @@ void NavigationPathQueryParameters2D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_map", "map"), &NavigationPathQueryParameters2D::set_map);
 	ClassDB::bind_method(D_METHOD("get_map"), &NavigationPathQueryParameters2D::get_map);
 
+	ClassDB::bind_method(D_METHOD("set_destination_map", "destination_map"), &NavigationPathQueryParameters2D::set_destination_map);
+	ClassDB::bind_method(D_METHOD("get_destination_map"), &NavigationPathQueryParameters2D::get_destination_map);
+
 	ClassDB::bind_method(D_METHOD("set_start_position", "start_position"), &NavigationPathQueryParameters2D::set_start_position);
 	ClassDB::bind_method(D_METHOD("get_start_position"), &NavigationPathQueryParameters2D::get_start_position);
 
@@ -223,6 +226,7 @@ void NavigationPathQueryParameters2D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_path_search_max_distance"), &NavigationPathQueryParameters2D::get_path_search_max_distance);
 
 	ADD_PROPERTY(PropertyInfo(Variant::RID, "map"), "set_map", "get_map");
+	ADD_PROPERTY(PropertyInfo(Variant::RID, "destination_map"), "set_destination_map", "get_destination_map");
 	ADD_PROPERTY(PropertyInfo(Variant::VECTOR2, "start_position"), "set_start_position", "get_start_position");
 	ADD_PROPERTY(PropertyInfo(Variant::VECTOR2, "target_position"), "set_target_position", "get_target_position");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "navigation_layers", PROPERTY_HINT_LAYERS_2D_NAVIGATION), "set_navigation_layers", "get_navigation_layers");
@@ -248,5 +252,6 @@ void NavigationPathQueryParameters2D::_bind_methods() {
 	BIND_BITFIELD_FLAG(PATH_METADATA_INCLUDE_TYPES);
 	BIND_BITFIELD_FLAG(PATH_METADATA_INCLUDE_RIDS);
 	BIND_BITFIELD_FLAG(PATH_METADATA_INCLUDE_OWNERS);
+	BIND_BITFIELD_FLAG(PATH_METADATA_INCLUDE_MAP_RIDS);
 	BIND_BITFIELD_FLAG(PATH_METADATA_INCLUDE_ALL);
 }

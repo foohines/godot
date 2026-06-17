@@ -467,7 +467,27 @@ void NavigationPolygon::set_parsed_collision_mask(uint32_t p_mask) {
 }
 
 uint32_t NavigationPolygon::get_parsed_collision_mask() const {
-	return parsed_collision_mask;
+	if (navigation_geometry_type == NAVIGATION_GEOMETRY_BOTH) {
+		return get_obstruction_collision_mask() | get_traversable_collision_mask();
+	} else {
+		return parsed_collision_mask;
+	}
+}
+
+void NavigationPolygon::set_obstruction_collision_mask(uint32_t p_mask) {
+	obstruction_collision_mask = p_mask;
+}
+
+uint32_t NavigationPolygon::get_obstruction_collision_mask() const {
+	return obstruction_collision_mask;
+}
+
+void NavigationPolygon::set_traversable_collision_mask(uint32_t p_mask) {
+	traversable_collision_mask = p_mask;
+}
+
+uint32_t NavigationPolygon::get_traversable_collision_mask() const {
+	return traversable_collision_mask;
 }
 
 void NavigationPolygon::set_parsed_collision_mask_value(int p_layer_number, bool p_value) {
@@ -578,6 +598,12 @@ void NavigationPolygon::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_parsed_collision_mask", "mask"), &NavigationPolygon::set_parsed_collision_mask);
 	ClassDB::bind_method(D_METHOD("get_parsed_collision_mask"), &NavigationPolygon::get_parsed_collision_mask);
 
+	ClassDB::bind_method(D_METHOD("set_obstruction_collision_mask", "mask"), &NavigationPolygon::set_obstruction_collision_mask);
+	ClassDB::bind_method(D_METHOD("get_obstruction_collision_mask"), &NavigationPolygon::get_obstruction_collision_mask);
+
+	ClassDB::bind_method(D_METHOD("set_traversable_collision_mask", "mask"), &NavigationPolygon::set_traversable_collision_mask);
+	ClassDB::bind_method(D_METHOD("get_traversable_collision_mask"), &NavigationPolygon::get_traversable_collision_mask);
+
 	ClassDB::bind_method(D_METHOD("set_parsed_collision_mask_value", "layer_number", "value"), &NavigationPolygon::set_parsed_collision_mask_value);
 	ClassDB::bind_method(D_METHOD("get_parsed_collision_mask_value", "layer_number"), &NavigationPolygon::get_parsed_collision_mask_value);
 
@@ -605,9 +631,13 @@ void NavigationPolygon::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "sample_partition_type", PROPERTY_HINT_ENUM, "Convex Partition,Triangulate"), "set_sample_partition_type", "get_sample_partition_type");
 	ADD_GROUP("Geometry", "");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "parsed_geometry_type", PROPERTY_HINT_ENUM, "Mesh Instances,Static Colliders,Meshes and Static Colliders"), "set_parsed_geometry_type", "get_parsed_geometry_type");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "navigation_geometry_type", PROPERTY_HINT_ENUM, "Obstruction, Traversable, Both"), "set_navigation_geometry_type", "get_navigation_geometry_type");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "parsed_collision_mask", PROPERTY_HINT_LAYERS_2D_PHYSICS), "set_parsed_collision_mask", "get_parsed_collision_mask");
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "navigation_geometry_type", PROPERTY_HINT_ENUM, "Obstruction, Traversable"), "set_navigation_geometry_type", "get_navigation_geometry_type");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "obstruction_collision_mask", PROPERTY_HINT_LAYERS_2D_PHYSICS), "set_obstruction_collision_mask", "get_obstruction_collision_mask");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "traversable_collision_mask", PROPERTY_HINT_LAYERS_2D_PHYSICS), "set_traversable_collision_mask", "get_traversable_collision_mask");
 	ADD_PROPERTY_DEFAULT("parsed_collision_mask", 0xFFFFFFFF);
+	ADD_PROPERTY_DEFAULT("obstruction_collision_mask", 0x00000000);
+	ADD_PROPERTY_DEFAULT("traversable_collision_mask", 0x00000000);
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "source_geometry_mode", PROPERTY_HINT_ENUM, "Root Node Children,Group With Children,Group Explicit"), "set_source_geometry_mode", "get_source_geometry_mode");
 	ADD_PROPERTY(PropertyInfo(Variant::STRING, "source_geometry_group_name"), "set_source_geometry_group_name", "get_source_geometry_group_name");
 	ADD_PROPERTY_DEFAULT("source_geometry_group_name", StringName("navigation_polygon_source_geometry_group"));
@@ -636,12 +666,13 @@ void NavigationPolygon::_bind_methods() {
 
 	BIND_ENUM_CONSTANT(NAVIGATION_GEOMETRY_OBSTRUCTION);
 	BIND_ENUM_CONSTANT(NAVIGATION_GEOMETRY_TRAVERSABLE);
+	BIND_ENUM_CONSTANT(NAVIGATION_GEOMETRY_BOTH);
 	BIND_ENUM_CONSTANT(NAVIGATION_GEOMETRY_MAX);
 }
 
 void NavigationPolygon::_validate_property(PropertyInfo &p_property) const {
 	if (p_property.name == "parsed_collision_mask") {
-		if (parsed_geometry_type == PARSED_GEOMETRY_MESH_INSTANCES) {
+		if (parsed_geometry_type == PARSED_GEOMETRY_MESH_INSTANCES || navigation_geometry_type == NAVIGATION_GEOMETRY_BOTH) {
 			p_property.usage = PROPERTY_USAGE_NONE;
 			return;
 		}
@@ -649,6 +680,13 @@ void NavigationPolygon::_validate_property(PropertyInfo &p_property) const {
 
 	if (p_property.name == "parsed_source_group_name") {
 		if (source_geometry_mode == SOURCE_GEOMETRY_ROOT_NODE_CHILDREN) {
+			p_property.usage = PROPERTY_USAGE_NONE;
+			return;
+		}
+	}
+
+	if (p_property.name == "obstruction_collision_mask" || p_property.name == "traversable_collision_mask") {
+		if (navigation_geometry_type != NAVIGATION_GEOMETRY_BOTH || parsed_geometry_type == PARSED_GEOMETRY_MESH_INSTANCES) {
 			p_property.usage = PROPERTY_USAGE_NONE;
 			return;
 		}
