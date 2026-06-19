@@ -37,6 +37,7 @@
 #include "nav_region_iteration_2d.h"
 
 #include "core/math/geometry_2d.h"
+#include "core/templates/rb_map.h"
 
 #include "core/variant/variant_utility.h"
 #include <chrono>
@@ -431,7 +432,7 @@ void NavMeshQueries2D::_query_task_build_path_corridor(NavMeshPathQueryTask2D &p
 
 	// Populate cross-map connections
 	_query_task_populate_cross_map_connections(p_query_task, maps_to_path_query_map_data);
-	HashMap<const Nav2D::Polygon *, LocalVector<Nav2D::Connection>> cross_map_connections = p_query_task.poly_to_cross_map_connections;
+	const HashMap<const Nav2D::Polygon *, LocalVector<Nav2D::Connection>> &cross_map_connections = p_query_task.poly_to_cross_map_connections;
 	// Heap of polygons to travel next.
 	Heap<NavigationPoly *, NavPolyTravelCostGreaterThan, NavPolyHeapIndexer>
 			&traversable_polys = p_query_task.path_query_slot->traversable_polys;
