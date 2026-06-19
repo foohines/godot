@@ -153,6 +153,7 @@ class NavMap2D : public NavRid2D {
 
 	LocalVector<NavMapIterationRead2D> get_linked_map_iteration_locks();
 	AHashMap<NavMap2D*, NavMeshQueries2D::PathQueryMapData> build_path_query_map_data_map(const LocalVector<NavMapIterationRead2D> &iteration_locks);
+	void populate_polygon_locations(NavMeshQueries2D::NavMeshPathQueryTask2D &p_query_task, AHashMap<NavMap2D *, NavMeshQueries2D::PathQueryMapData> &maps_to_path_query_map_data);
 	void free_path_query_slots_for_query(AHashMap<NavMap2D*, NavMeshQueries2D::PathQueryMapData> &maps_to_path_query_map_data);
 	
 	public:

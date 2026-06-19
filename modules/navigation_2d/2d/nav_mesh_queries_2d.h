@@ -53,8 +53,6 @@ public:
 		bool in_use = false;
 		uint32_t slot_index = 0;
 		AHashMap<const Nav2D::Polygon *, uint32_t> poly_to_id;
-		HashMap<const Nav2D::Polygon *, LocalVector<Nav2D::Connection>> poly_to_cross_map_connections;
-
 	};
 
 	struct PathQueryMapData {
@@ -63,8 +61,14 @@ public:
 	};
 
 	struct PolygonPositionResult {
-		const Nav2D::Polygon* polygon = nullptr;
+		const Nav2D::Polygon *polygon = nullptr;
 		Vector2 position;
+	};
+
+	struct PolygonLocation {
+		NavMap2D *map = nullptr;
+		PathQuerySlot *slot = nullptr;
+		uint32_t id = 0;
 	};
 
 	struct NavMeshPathQueryTask2D {
@@ -101,8 +105,13 @@ public:
 		Vector2 end_position;
 		const Nav2D::Polygon *begin_polygon = nullptr;
 		const Nav2D::Polygon *end_polygon = nullptr;
-		NavMap2D * least_cost_map = nullptr;
+		NavMap2D *least_cost_map = nullptr;
 		uint32_t least_cost_id = 0;
+
+		// Cross Map helper structures
+		HashMap<const Nav2D::Polygon *, LocalVector<Nav2D::Connection>> poly_to_cross_map_connections;
+		AHashMap<const Nav2D::Polygon *, PolygonLocation> polygon_to_location;
+
 
 		// Map.
 		NavMap2D *map = nullptr;
@@ -155,11 +164,11 @@ public:
 
 	static void map_query_path(NavMap2D *p_map, NavMap2D *p_destination_map, const Ref<NavigationPathQueryParameters2D> &p_query_parameters, Ref<NavigationPathQueryResult2D> p_query_result, const Callable &p_callback);
 
-	static void query_task_map_iteration_get_path(NavMeshPathQueryTask2D &p_query_task, AHashMap<NavMap2D*, PathQueryMapData> &maps_to_path_query_map_data);
-	static void _query_task_push_back_point_with_metadata(NavMeshPathQueryTask2D &p_query_task, const Vector2 &p_point, const Nav2D::Polygon *p_point_polygon, AHashMap<NavMap2D *, PathQueryMapData> &maps_to_path_query_map_data);
-	static void _query_task_find_start_end_positions(NavMeshPathQueryTask2D &p_query_task, AHashMap<NavMap2D*, PathQueryMapData> &maps_to_path_query_map_data);
+	static void query_task_map_iteration_get_path(NavMeshPathQueryTask2D &p_query_task, AHashMap<NavMap2D *, PathQueryMapData> &maps_to_path_query_map_data);
+	static void _query_task_push_back_point_with_metadata(NavMeshPathQueryTask2D &p_query_task, const Vector2 &p_point, const Nav2D::Polygon *p_point_polygon);
+	static void _query_task_find_start_end_positions(NavMeshPathQueryTask2D &p_query_task, AHashMap<NavMap2D *, PathQueryMapData> &maps_to_path_query_map_data);
 	static PolygonPositionResult _query_task_find_polygon_for_position(NavMeshPathQueryTask2D &p_query_task, NavMapIteration2D &map_iteration, Vector2 &position);
-	static void _query_task_build_path_corridor(NavMeshPathQueryTask2D &p_query_task, AHashMap<NavMap2D*, PathQueryMapData> &maps_to_path_query_map_data);
+	static void _query_task_build_path_corridor(NavMeshPathQueryTask2D &p_query_task, AHashMap<NavMap2D *, PathQueryMapData> &maps_to_path_query_map_data);
 	static void _query_task_post_process_corridorfunnel(NavMeshPathQueryTask2D &p_query_task, AHashMap<NavMap2D *, PathQueryMapData> &maps_to_path_query_map_data);
 	static void _query_task_post_process_edgecentered(NavMeshPathQueryTask2D &p_query_task, AHashMap<NavMap2D *, PathQueryMapData> &maps_to_path_query_map_data);
 	static void _query_task_post_process_nopostprocessing(NavMeshPathQueryTask2D &p_query_task, AHashMap<NavMap2D *, PathQueryMapData> &maps_to_path_query_map_data);
@@ -167,7 +176,7 @@ public:
 	static void _query_task_simplified_path_points(NavMeshPathQueryTask2D &p_query_task);
 	static bool _query_task_is_connection_owner_usable(const NavMeshPathQueryTask2D &p_query_task, const NavBaseIteration2D *p_owner);
 	static void _query_task_process_path_result_limits(NavMeshPathQueryTask2D &p_query_task);
-	static void _query_task_populate_cross_map_connections(NavMeshPathQueryTask2D &p_query_task, AHashMap<NavMap2D*, PathQueryMapData> &maps_to_path_query_map_data);
+	static void _query_task_populate_cross_map_connections(NavMeshPathQueryTask2D &p_query_task, AHashMap<NavMap2D *, PathQueryMapData> &maps_to_path_query_map_data);
 
 	static void _query_task_search_polygon_connections(NavMeshPathQueryTask2D &p_query_task, AHashMap<NavMap2D *, PathQueryMapData> &maps_to_path_query_map_data, const Nav2D::Connection &p_connection, uint32_t p_least_cost_id, const Nav2D::NavigationPoly &p_least_cost_poly, real_t p_poly_enter_cost, const Vector2 &p_end_point);
 

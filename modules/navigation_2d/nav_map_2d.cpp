@@ -63,15 +63,13 @@ using namespace Nav2D;
 	NavMapIterationRead2D iteration_read_lock(map_iteration);                 \
 	iteration_slot_rwlock.read_unlock();
 
-const RID_Owner<NavMap2D>* NavMap2D::get_owner() const {
+const RID_Owner<NavMap2D> *NavMap2D::get_owner() const {
 	return owner;
 }
 
-void NavMap2D::set_owner(RID_Owner<NavMap2D>* p_owner) {
+void NavMap2D::set_owner(RID_Owner<NavMap2D> *p_owner) {
 	owner = p_owner;
 }
-
-
 
 void NavMap2D::set_cell_size(real_t p_cell_size) {
 	if (cell_size == p_cell_size) {
@@ -130,43 +128,40 @@ PointKey NavMap2D::get_point_key(const Vector2 &p_pos) const {
 	return p;
 }
 
-
 NavMapIterationRead2D NavMap2D::get_current_iteration_read_lock() {
 	GET_MAP_ITERATION();
 	return iteration_read_lock;
 }
 
 LocalVector<NavMapIterationRead2D> NavMap2D::get_linked_map_iteration_locks() {
-	HashSet<NavMap2D*> visited;
-	LocalVector<NavMap2D*> to_visit;
+	HashSet<NavMap2D *> visited;
+	LocalVector<NavMap2D *> to_visit;
 	LocalVector<NavMapIterationRead2D> iteration_locks;
 
 	to_visit.push_back(this);
 
-
 	while (to_visit.size()) {
-		NavMap2D* map = to_visit[to_visit.size() - 1];
+		NavMap2D *map = to_visit[to_visit.size() - 1];
 		to_visit.remove_at(to_visit.size() - 1);
 
 		if (visited.has(map)) {
 			continue;
 		}
-		
+
 		visited.insert(map);
 
 		iteration_locks.push_back(map->get_current_iteration_read_lock());
-		for (NavMap2D* linked_map : iteration_locks[iteration_locks.size() - 1].iteration()->linked_maps) {
+		for (NavMap2D *linked_map : iteration_locks[iteration_locks.size() - 1].iteration()->linked_maps) {
 			if (!visited.has(linked_map)) {
 				to_visit.push_back(linked_map);
 			}
 		}
-		
 	}
 
 	return iteration_locks;
 }
 
-NavMeshQueries2D::PathQuerySlot* NavMap2D::requisition_path_query_slot(NavMapIteration2D &map_iteration) {
+NavMeshQueries2D::PathQuerySlot *NavMap2D::requisition_path_query_slot(NavMapIteration2D &map_iteration) {
 	NavMeshQueries2D::PathQuerySlot *slot = nullptr;
 	map_iteration.path_query_slots_semaphore.wait();
 
@@ -186,7 +181,6 @@ NavMeshQueries2D::PathQuerySlot* NavMap2D::requisition_path_query_slot(NavMapIte
 	}
 
 	return slot;
-
 }
 
 void NavMap2D::free_path_query_slot(NavMapIteration2D &map_iteration, NavMeshQueries2D::PathQuerySlot &path_query_slot) {
@@ -199,16 +193,16 @@ void NavMap2D::free_path_query_slot(NavMapIteration2D &map_iteration, NavMeshQue
 	map_iteration.path_query_slots_semaphore.post();
 }
 
-void NavMap2D::free_path_query_slots_for_query(AHashMap<NavMap2D*, NavMeshQueries2D::PathQueryMapData> &maps_to_path_query_map_data) {
-	for (AHashMap<NavMap2D*, NavMeshQueries2D::PathQueryMapData>::Iterator it = maps_to_path_query_map_data.begin(); it; ++it) {
+void NavMap2D::free_path_query_slots_for_query(AHashMap<NavMap2D *, NavMeshQueries2D::PathQueryMapData> &maps_to_path_query_map_data) {
+	for (AHashMap<NavMap2D *, NavMeshQueries2D::PathQueryMapData>::Iterator it = maps_to_path_query_map_data.begin(); it; ++it) {
 		it->key->free_path_query_slot(*it->value.iteration, *it->value.query_slot);
 	}
 }
 
-AHashMap<NavMap2D*, NavMeshQueries2D::PathQueryMapData> NavMap2D::build_path_query_map_data_map(const LocalVector<NavMapIterationRead2D> &iteration_locks) {
-	AHashMap<NavMap2D*, NavMeshQueries2D::PathQueryMapData> maps_to_path_query_map_data;
+AHashMap<NavMap2D *, NavMeshQueries2D::PathQueryMapData> NavMap2D::build_path_query_map_data_map(const LocalVector<NavMapIterationRead2D> &iteration_locks) {
+	AHashMap<NavMap2D *, NavMeshQueries2D::PathQueryMapData> maps_to_path_query_map_data;
 	maps_to_path_query_map_data.reserve(iteration_locks.size());
-	for (const NavMapIterationRead2D &lock: iteration_locks) {
+	for (const NavMapIterationRead2D &lock : iteration_locks) {
 		NavMeshQueries2D::PathQueryMapData data;
 		data.iteration = lock.iteration();
 		data.query_slot = data.iteration->map->requisition_path_query_slot(*data.iteration);
@@ -219,7 +213,21 @@ AHashMap<NavMap2D*, NavMeshQueries2D::PathQueryMapData> NavMap2D::build_path_que
 	return maps_to_path_query_map_data;
 }
 
+void NavMap2D::populate_polygon_locations(NavMeshQueries2D::NavMeshPathQueryTask2D &p_query_task, AHashMap<NavMap2D *, NavMeshQueries2D::PathQueryMapData> &maps_to_path_query_map_data) {
+	uint32_t total_polys = 0;
+	for (auto it = maps_to_path_query_map_data.begin(); it; ++it) {
+		total_polys += it->value.query_slot->poly_to_id.size();
+	}
+	p_query_task.polygon_to_location.reserve(total_polys);
 
+	for (auto it = maps_to_path_query_map_data.begin(); it; ++it) {
+		NavMap2D *map = it->key;
+		NavMeshQueries2D::PathQuerySlot *slot = it->value.query_slot;
+		for (const KeyValue<const Polygon *, uint32_t> &kv : slot->poly_to_id) {
+			p_query_task.polygon_to_location.insert_new(kv.key, NavMeshQueries2D::PolygonLocation{ map, slot, kv.value });
+		}
+	}
+}
 
 void NavMap2D::query_path(NavMeshQueries2D::NavMeshPathQueryTask2D &p_query_task) {
 	if (iteration_id == 0) {
@@ -227,7 +235,7 @@ void NavMap2D::query_path(NavMeshQueries2D::NavMeshPathQueryTask2D &p_query_task
 	}
 
 	LocalVector<NavMapIterationRead2D> linked_map_iteration_locks = get_linked_map_iteration_locks();
-	AHashMap<NavMap2D*, NavMeshQueries2D::PathQueryMapData> maps_to_path_query_map_data = build_path_query_map_data_map(linked_map_iteration_locks);
+	AHashMap<NavMap2D *, NavMeshQueries2D::PathQueryMapData> maps_to_path_query_map_data = build_path_query_map_data_map(linked_map_iteration_locks);
 
 	if (!maps_to_path_query_map_data.has(p_query_task.destination_map)) {
 		free_path_query_slots_for_query(maps_to_path_query_map_data);
@@ -235,9 +243,8 @@ void NavMap2D::query_path(NavMeshQueries2D::NavMeshPathQueryTask2D &p_query_task
 		return;
 	}
 
-
 	p_query_task.path_query_slot = maps_to_path_query_map_data.get(this).query_slot;
-
+	populate_polygon_locations(p_query_task, maps_to_path_query_map_data);
 
 	NavMeshQueries2D::query_task_map_iteration_get_path(p_query_task, maps_to_path_query_map_data);
 
