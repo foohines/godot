@@ -194,6 +194,12 @@ void RendererCanvasCull::_attach_canvas_item_for_draw(RendererCanvasCull::Item *
 		ci->copy_back_buffer->screen_rect = p_transform.xform(ci->copy_back_buffer->rect).intersection(p_clip_rect);
 	}
 
+	if (ci->is_player) {
+		if (false) {
+			print_line("hello");
+		}
+	}
+
 	if (p_use_canvas_group) {
 		int zidx = p_z - RSE::CANVAS_ITEM_Z_MIN;
 		if (r_canvas_group_from == nullptr) {
@@ -861,7 +867,6 @@ void RendererCanvasCull::canvas_item_set_height_sort_override(RID p_item, Rect2 
 	canvas_item->sort_override.sort_rect = p_sort_rect;
 	canvas_item->sort_override.height = p_height;
 	canvas_item->sort_rect_dirty = true;
-
 }
 void RendererCanvasCull::canvas_item_remove_height_sort_override(RID p_item) {
 	Item *canvas_item = canvas_item_owner.get_or_null(p_item);
@@ -869,7 +874,6 @@ void RendererCanvasCull::canvas_item_remove_height_sort_override(RID p_item) {
 
 	canvas_item->sort_override.enabled = false;
 	canvas_item->sort_rect_dirty = true;
-
 }
 
 Rect2 RendererCanvasCull::canvas_item_get_sort_rect(RID p_item) {
@@ -939,7 +943,7 @@ int RendererCanvasCull::_sample_item_height(Item *p_item, real_t p_local_y) {
 	if (p_item->sort_override.enabled) {
 		return p_item->sort_override.height;
 	}
-	
+
 	int max_height = 0;
 	for (HeightSortContributor &contributor : p_item->height_sort_contributors) {
 		int height = contributor.sample_height(p_local_y);
@@ -995,63 +999,62 @@ int RendererCanvasCull::_populate_valid_height_sort_indices(Item **p_y_sorted_it
 	return valid_indices_count;
 }
 
-
 int RendererCanvasCull::_find_cycle_node(int p_item_count) {
-    // state: 0 = unvisited, 1 = on current path, 2 = fully explored
-    _cycle_state.resize(p_item_count);
-    memset(_cycle_state.ptr(), 0, p_item_count * sizeof(uint8_t));
+	// state: 0 = unvisited, 1 = on current path, 2 = fully explored
+	_cycle_state.resize(p_item_count);
+	memset(_cycle_state.ptr(), 0, p_item_count * sizeof(uint8_t));
 
-    _cycle_dfs_node.clear();
-    _cycle_dfs_edge.clear();
+	_cycle_dfs_node.clear();
+	_cycle_dfs_edge.clear();
 
-    for (int start = 0; start < p_item_count; start++) {
-        // skip already-processed nodes and already-explored nodes
-        if (_sort_indegree[start] == 0 || _cycle_state[start] != 0) {
-            continue;
-        }
+	for (int start = 0; start < p_item_count; start++) {
+		// skip already-processed nodes and already-explored nodes
+		if (_sort_indegree[start] <= 0 || _cycle_state[start] != 0) {
+			continue;
+		}
 
-        _cycle_dfs_node.push_back(start);
-        _cycle_dfs_edge.push_back(_sort_edge_offsets[start]);
-        _cycle_state[start] = 1; // on path
+		_cycle_dfs_node.push_back(start);
+		_cycle_dfs_edge.push_back(_sort_edge_offsets[start]);
+		_cycle_state[start] = 1; // on path
 
-        while (!_cycle_dfs_node.is_empty()) {
-            int node = _cycle_dfs_node[_cycle_dfs_node.size() - 1];
-            int &edge_cursor = _cycle_dfs_edge[_cycle_dfs_edge.size() - 1];
+		while (!_cycle_dfs_node.is_empty()) {
+			int node = _cycle_dfs_node[_cycle_dfs_node.size() - 1];
+			int &edge_cursor = _cycle_dfs_edge[_cycle_dfs_edge.size() - 1];
 
-            bool descended = false;
-            while (edge_cursor < _sort_edge_offsets[node + 1]) {
-                int neighbour = _sort_edges[edge_cursor].to;
-                edge_cursor++;
+			bool descended = false;
+			while (edge_cursor < _sort_edge_offsets[node + 1]) {
+				int neighbour = _sort_edges[edge_cursor].to;
+				edge_cursor++;
 
-                // ignore edges to already-processed nodes
-                if (_sort_indegree[neighbour] == 0) {
-                    continue;
-                }
+				// ignore edges to already-processed nodes
+				if (_sort_indegree[neighbour] <= 0) {
+					continue;
+				}
 
-                if (_cycle_state[neighbour] == 1) {
-                    // neighbour is on current path - found a cycle
-                    return neighbour;
-                }
+				if (_cycle_state[neighbour] == 1) {
+					// neighbour is on current path - found a cycle
+					return neighbour;
+				}
 
-                if (_cycle_state[neighbour] == 0) {
-                    _cycle_state[neighbour] = 1;
-                    _cycle_dfs_node.push_back(neighbour);
-                    _cycle_dfs_edge.push_back(_sort_edge_offsets[neighbour]);
-                    descended = true;
-                    break;
-                }
-            }
+				if (_cycle_state[neighbour] == 0) {
+					_cycle_state[neighbour] = 1;
+					_cycle_dfs_node.push_back(neighbour);
+					_cycle_dfs_edge.push_back(_sort_edge_offsets[neighbour]);
+					descended = true;
+					break;
+				}
+			}
 
-            if (!descended) {
-                // done with this node, pop it off the path
-                _cycle_state[node] = 2;
-                _cycle_dfs_node.remove_at(_cycle_dfs_node.size() - 1);
-                _cycle_dfs_edge.remove_at(_cycle_dfs_edge.size() - 1);
-            }
-        }
-    }
+			if (!descended) {
+				// done with this node, pop it off the path
+				_cycle_state[node] = 2;
+				_cycle_dfs_node.remove_at(_cycle_dfs_node.size() - 1);
+				_cycle_dfs_edge.remove_at(_cycle_dfs_edge.size() - 1);
+			}
+		}
+	}
 
-    return -1;
+	return -1;
 }
 
 // TODO: ? Maybe look into "sweep and prune" or grid-based optimizations for item overlap detection
@@ -1170,7 +1173,6 @@ void RendererCanvasCull::_height_sort(Item **p_y_sorted_items, int p_item_count)
 
 			// }
 
-			
 			int cycle_node = _find_cycle_node(p_item_count);
 			ERR_FAIL_COND(cycle_node == -1); // queue empty but no cycle = logic error
 			_sort_indegree[cycle_node] = 0;
@@ -1193,6 +1195,25 @@ void RendererCanvasCull::_height_sort(Item **p_y_sorted_items, int p_item_count)
 	}
 
 	Item **sorted_copy = (Item **)alloca(p_item_count * sizeof(Item *));
+
+// make sure we arent culling ir duplicating anything
+#ifdef DEBUG_ENABLED
+	{
+		int *seen = (int *)alloca(p_item_count * sizeof(int));
+		memset(seen, 0, p_item_count * sizeof(int));
+		for (int i = 0; i < p_item_count; i++) {
+			const int idx = _sort_result[i];
+			ERR_CONTINUE_MSG(idx < 0 || idx >= p_item_count,
+					vformat("Height sort produced out-of-range index %d at position %d.", idx, i));
+			seen[idx]++;
+		}
+		for (int i = 0; i < p_item_count; i++) {
+			ERR_CONTINUE_MSG(seen[i] != 1,
+					vformat("Height sort result is not a valid permutation: item %d appears %d time(s).", i, seen[i]));
+		}
+	}
+#endif
+
 	for (int i = 0; i < p_item_count; i++) {
 		sorted_copy[i] = p_y_sorted_items[_sort_result[i]];
 	}
