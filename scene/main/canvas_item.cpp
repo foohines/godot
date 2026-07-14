@@ -1088,6 +1088,10 @@ void CanvasItem::set_is_player(bool p_is_player) {
 	RenderingServer::get_singleton()->canvas_item_set_is_player(canvas_item, p_is_player);
 }
 
+bool CanvasItem::get_is_player() const {
+	return RenderingServer::get_singleton()->canvas_item_get_is_player(canvas_item);
+}
+
 void CanvasItem::draw_set_transform(const Point2 &p_offset, real_t p_rot, const Size2 &p_scale) {
 	ERR_THREAD_GUARD;
 	ERR_DRAW_GUARD;

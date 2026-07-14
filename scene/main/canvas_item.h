@@ -246,6 +246,7 @@ public:
 	};
 
 	void set_is_player(bool p_is_player);
+	bool get_is_player() const;
 
 	/* EDITOR AND DEBUGGING */
 

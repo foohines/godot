@@ -44,14 +44,34 @@ class RendererCanvasCull {
 public:
 	struct HeightSort {
 		LocalVector<uint8_t> y_to_height;
-		LocalVector<Rect2i>tight_rects;
+		LocalVector<Rect2i> tight_rects;
 		int frame_count = 0;
 		Vector2i frame_size;
 	};
 
+	struct HeightSortKey {
+		RID texture;
+		Rect2i region;
+		HeightSortKey(RID p_texture, Rect2i p_region) : texture(p_texture), region(p_region) {}
+		bool operator==(const HeightSortKey &hs) const {
+			return texture == hs.texture && region == hs.region;
+		}
+	};
+
+	struct HeightSortKeyHasher {
+		static uint32_t hash(const HeightSortKey &k) {
+			uint32_t h = hash_one_uint64(k.texture.get_id());
+			h = hash_murmur3_one_32(k.region.position.x, h);
+			h = hash_murmur3_one_32(k.region.position.y, h);
+			h = hash_murmur3_one_32(k.region.size.x, h);
+			h = hash_murmur3_one_32(k.region.size.y, h);
+			return hash_fmix32(h);
+		}
+	};
+
 	struct HeightSortEdge {
-    	int from;
-    	int to;
+		int from;
+		int to;
 		// StringName from_name;
 		// StringName to_name;
 		bool operator<(const HeightSortEdge &p_other) const {
@@ -95,7 +115,6 @@ public:
 		}
 	};
 
-
 	struct Item : public RendererCanvasRender::Item {
 		RID parent; // canvas it belongs to
 		RID self;
@@ -115,7 +134,7 @@ public:
 		int ysort_parent_abs_z_index; // Absolute Z index of parent. Only populated and used when y-sorting.
 		uint32_t visibility_layer = 0xffffffff;
 		bool is_player = false;
-		
+
 		// StringName name;
 
 		LocalVector<HeightSortContributor> height_sort_contributors;
@@ -309,6 +328,7 @@ public:
 
 	void canvas_item_set_parent(RID p_item, RID p_parent);
 	void canvas_item_set_is_player(RID p_item, bool p_is_player);
+	bool canvas_item_get_is_player(RID p_item) const;
 
 	// void canvas_item_set_name(RID p_item, StringName p_name);
 
@@ -331,7 +351,6 @@ public:
 	void canvas_item_set_base_height(RID p_item, float p_base_height);
 
 public:
-
 	void canvas_item_set_update_when_visible(RID p_item, bool p_update);
 
 	float canvas_item_get_compensated_antialiasing_width(float p_width) const;
@@ -464,13 +483,12 @@ public:
 
 	void finalize();
 
-
 	/* HEIGHT SORT */
 public:
-	bool texture_height_sort_exists(RID p_texture) const;
-	void texture_set_height_sort(RID p_texture, int p_frame_count, Vector2i p_frame_size, const PackedByteArray &p_height_data, const TypedArray<Rect2i> &p_tight_rects);
+	bool texture_height_sort_exists(RID p_texture, Rect2i p_atlas_region = Rect2i()) const;
+	void texture_set_height_sort(RID p_texture, int p_frame_count, Vector2i p_frame_size, const PackedByteArray &p_height_data, const TypedArray<Rect2i> &p_tight_rects, Rect2i p_atlas_region = Rect2i());
 
-	void canvas_item_set_height_sort_contributor(RID p_item, RID p_contributor_item, RID p_texture, Vector2 p_local_offset);
+	void canvas_item_set_height_sort_contributor(RID p_item, RID p_contributor_item, RID p_texture, Vector2 p_local_offset, Rect2i p_atlas_region = Rect2i());
 	void canvas_item_remove_height_sort_contributor(RID p_item, RID p_contributor_item);
 	void canvas_item_set_height_sort_frame(RID p_item, RID p_contributor_item, int p_frame);
 	void canvas_item_set_height_sort_offset(RID p_item, RID p_contributor_item, Vector2 p_local_offset);
@@ -486,9 +504,8 @@ public:
 	inline static float height_sort_debug_height_a = 0.0f;
 	inline static float height_sort_debug_height_b = 0.0f;
 
-
 private:
-	AHashMap<RID, HeightSort*> height_sort_cache;
+	AHashMap<HeightSortKey, HeightSort *, HeightSortKeyHasher> height_sort_cache;
 
 	LocalVector<HeightSortEdge> _sort_edges;
 	LocalVector<int> _sort_indegree;
@@ -500,12 +517,10 @@ private:
 	LocalVector<int> _cycle_dfs_node;
 	LocalVector<int> _cycle_dfs_edge;
 
-
-
 	void _resolve_item_sort_rect(Item &p_item);
-	void _resolve_item_sort_rects(Item** p_y_sorted_items, int p_item_count);
+	void _resolve_item_sort_rects(Item **p_y_sorted_items, int p_item_count);
 	int _sample_item_height(Item *p_item, real_t p_local_y);
-	void _height_sort(Item** p_y_sorted_items, int p_item_count);
+	void _height_sort(Item **p_y_sorted_items, int p_item_count);
 	int _populate_valid_height_sort_indices(Item **p_y_sorted_items, int p_item_count, int *valid_indices);
 	void _sort_heap_push(LocalVector<int> &heap, int value);
 	int _sort_heap_pop(LocalVector<int> &heap);
@@ -513,7 +528,6 @@ private:
 	int _find_cycle_node(int p_item_count);
 
 	bool _is_node_in_cycle(int p_node, int p_item_count);
-	
 
 	/* INTERPOLATION */
 

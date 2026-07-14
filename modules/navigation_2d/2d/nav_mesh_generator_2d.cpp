@@ -509,10 +509,17 @@ void NavMeshGenerator2D::generator_bake_from_source_geometry_data(Ref<Navigation
 	Vector<Vector2> new_vertices;
 	Vector<Vector<int>> new_polygons;
 
+	PackedInt32Array flattened_polygon_indices;
+	PackedInt32Array polygon_ranges;
+	int range_index = 0;
+
 	HashMap<Vector2, int> points;
+
+	
 	for (const TPPLPoly &tp : tppl_out_polygon) {
 		Vector<int> new_polygon;
-
+		polygon_ranges.push_back(range_index);
+		
 		for (int64_t i = 0; i < tp.GetNumPoints(); i++) {
 			HashMap<Vector2, int>::Iterator E = points.find(tp[i]);
 			if (!E) {
@@ -520,12 +527,15 @@ void NavMeshGenerator2D::generator_bake_from_source_geometry_data(Ref<Navigation
 				new_vertices.push_back(tp[i]);
 			}
 			new_polygon.push_back(E->value);
+			flattened_polygon_indices.push_back(E->value);
+			range_index++;
 		}
 
 		new_polygons.push_back(new_polygon);
 	}
 
-	p_navigation_mesh->set_data(new_vertices, new_polygons);
+	polygon_ranges.push_back(range_index);
+	p_navigation_mesh->set_data(new_vertices, new_polygons, flattened_polygon_indices, polygon_ranges);
 }
 
 #endif // CLIPPER2_ENABLED

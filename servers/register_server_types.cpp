@@ -87,6 +87,7 @@
 // 2D physics and navigation.
 #ifndef NAVIGATION_2D_DISABLED
 #include "servers/navigation_2d/navigation_server_2d.h"
+#include "servers/navigation_2d/navigation_geometry.h"
 #endif // NAVIGATION_2D_DISABLED
 #ifndef PHYSICS_2D_DISABLED
 #include "servers/physics_2d/physics_server_2d.h"
@@ -279,6 +280,7 @@ void register_server_types() {
 	GDREGISTER_ABSTRACT_CLASS(NavigationServer2D);
 	GDREGISTER_CLASS(NavigationPathQueryParameters2D);
 	GDREGISTER_CLASS(NavigationPathQueryResult2D);
+	GDREGISTER_CLASS(NavigationGeometry);
 
 	GLOBAL_DEF(PropertyInfo(Variant::STRING, NavigationServer2DManager::setting_property_name, PROPERTY_HINT_ENUM, "DEFAULT"), "DEFAULT");
 

@@ -157,10 +157,10 @@ public:
 	virtual uint64_t texture_get_native_handle(RID p_texture, bool p_srgb = false) const = 0;
 
 	/* HEIGHT SORT API */
-	virtual bool texture_height_sort_exists(RID p_texture) const = 0;
-	virtual void texture_set_height_sort(RID p_texture, int p_frame_count, Vector2i p_frame_size, const PackedByteArray &p_height_data, const TypedArray<Rect2i> &p_tight_rects) = 0;
+	virtual bool texture_height_sort_exists(RID p_texture, Rect2i p_atlas_region = Rect2i()) const = 0;
+	virtual void texture_set_height_sort(RID p_texture, int p_frame_count, Vector2i p_frame_size, const PackedByteArray &p_height_data, const TypedArray<Rect2i> &p_tight_rects, Rect2i p_atlas_region = Rect2i()) = 0;
 
-	virtual void canvas_item_set_height_sort_contributor(RID p_item, RID p_contributor_item, RID p_texture, Vector2 p_local_offset) = 0;
+	virtual void canvas_item_set_height_sort_contributor(RID p_item, RID p_contributor_item, RID p_texture, Vector2 p_local_offset, Rect2i p_atlas_region = Rect2i()) = 0;
 	virtual void canvas_item_remove_height_sort_contributor(RID p_item, RID p_contributor_item) = 0;
 	virtual void canvas_item_set_height_sort_frame(RID p_item, RID p_contributor_item, int p_frame) = 0;
 	virtual void canvas_item_set_height_sort_offset(RID p_item, RID p_contributor_item, Vector2 p_local_offset) = 0;
@@ -860,6 +860,7 @@ public:
 	virtual void canvas_item_add_animation_slice(RID p_item, double p_animation_length, double p_slice_begin, double p_slice_end, double p_offset) = 0;
 
 	virtual void canvas_item_set_is_player(RID p_item, bool p_is_player) = 0;
+	virtual bool canvas_item_get_is_player(RID p_item) const = 0;
 
 	virtual void canvas_item_set_sort_children_by_y(RID p_item, bool p_enable) = 0;
 	virtual void canvas_item_set_z_index(RID p_item, int p_z) = 0;

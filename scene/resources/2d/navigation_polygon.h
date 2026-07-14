@@ -41,6 +41,9 @@ class NavigationPolygon : public Resource {
 	Vector<Vector<int>> polygons;
 	Vector<Vector<Vector2>> outlines;
 
+	PackedInt32Array flattened_polygon_indices;
+	PackedInt32Array flattened_polygon_ranges;
+
 	mutable Rect2 item_rect;
 	mutable bool rect_cache_dirty = true;
 
@@ -97,7 +100,6 @@ public:
 		NAVIGATION_GEOMETRY_MAX
 	};
 
-
 	real_t agent_radius = 10.0f;
 
 	SamplePartitionType partition_type = SAMPLE_PARTITION_CONVEX_PARTITION;
@@ -131,6 +133,9 @@ public:
 #ifndef DISABLE_DEPRECATED
 	void make_polygons_from_outlines();
 #endif // DISABLE_DEPRECATED
+
+	PackedInt32Array get_flattened_polygon_indices() const;
+	PackedInt32Array get_flattened_polygon_ranges() const;
 
 	void set_polygons(const Vector<Vector<int>> &p_polygons);
 	Vector<Vector<int>> get_polygons() const;
@@ -183,7 +188,7 @@ public:
 
 	void clear();
 
-	void set_data(const Vector<Vector2> &p_vertices, const Vector<Vector<int>> &p_polygons);
+	void set_data(const Vector<Vector2> &p_vertices, const Vector<Vector<int>> &p_polygons, const PackedInt32Array &p_flattened_polygon_indices, const PackedInt32Array &p_flattened_polygon_ranges);
 	void set_data(const Vector<Vector2> &p_vertices, const Vector<Vector<int>> &p_polygons, const Vector<Vector<Vector2>> &p_outlines);
 	void get_data(Vector<Vector2> &r_vertices, Vector<Vector<int>> &r_polygons);
 	void get_data(Vector<Vector2> &r_vertices, Vector<Vector<int>> &r_polygons, Vector<Vector<Vector2>> &r_outlines);

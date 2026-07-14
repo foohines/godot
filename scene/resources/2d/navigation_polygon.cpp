@@ -96,6 +96,16 @@ Vector<Vector2> NavigationPolygon::get_vertices() const {
 	return vertices;
 }
 
+PackedInt32Array NavigationPolygon::get_flattened_polygon_indices() const {
+	RWLockRead read_lock(rwlock);
+	return flattened_polygon_indices;
+}
+
+PackedInt32Array NavigationPolygon::get_flattened_polygon_ranges() const {
+	RWLockRead read_lock(rwlock);
+	return flattened_polygon_ranges;
+}
+
 void NavigationPolygon::_set_polygons(const TypedArray<Vector<int32_t>> &p_array) {
 	RWLockWrite write_lock(rwlock);
 	{
@@ -184,10 +194,13 @@ void NavigationPolygon::clear() {
 	}
 }
 
-void NavigationPolygon::set_data(const Vector<Vector2> &p_vertices, const Vector<Vector<int>> &p_polygons) {
+void NavigationPolygon::set_data(const Vector<Vector2> &p_vertices, const Vector<Vector<int>> &p_polygons, const PackedInt32Array &p_flattened_polygon_indices, const PackedInt32Array &p_flattened_polygon_ranges) {
 	RWLockWrite write_lock(rwlock);
 	vertices = p_vertices;
 	polygons = p_polygons;
+	flattened_polygon_indices = p_flattened_polygon_indices;
+	flattened_polygon_ranges = p_flattened_polygon_ranges;
+
 	{
 		MutexLock lock(navigation_mesh_generation);
 		navigation_mesh.unref();
@@ -621,6 +634,9 @@ void NavigationPolygon::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_baking_rect"), &NavigationPolygon::get_baking_rect);
 	ClassDB::bind_method(D_METHOD("set_baking_rect_offset", "rect_offset"), &NavigationPolygon::set_baking_rect_offset);
 	ClassDB::bind_method(D_METHOD("get_baking_rect_offset"), &NavigationPolygon::get_baking_rect_offset);
+
+	ClassDB::bind_method(D_METHOD("get_flattened_polygon_indices"), &NavigationPolygon::get_flattened_polygon_indices);
+	ClassDB::bind_method(D_METHOD("get_flattened_polygon_ranges"), &NavigationPolygon::get_flattened_polygon_ranges);
 
 	ClassDB::bind_method(D_METHOD("clear"), &NavigationPolygon::clear);
 

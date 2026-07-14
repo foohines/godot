@@ -194,12 +194,6 @@ void RendererCanvasCull::_attach_canvas_item_for_draw(RendererCanvasCull::Item *
 		ci->copy_back_buffer->screen_rect = p_transform.xform(ci->copy_back_buffer->rect).intersection(p_clip_rect);
 	}
 
-	if (ci->is_player) {
-		if (false) {
-			print_line("hello");
-		}
-	}
-
 	if (p_use_canvas_group) {
 		int zidx = p_z - RSE::CANVAS_ITEM_Z_MIN;
 		if (r_canvas_group_from == nullptr) {
@@ -578,6 +572,13 @@ void RendererCanvasCull::canvas_item_set_is_player(RID p_item, bool p_is_player)
 	canvas_item->is_player = p_is_player;
 }
 
+bool RendererCanvasCull::canvas_item_get_is_player(RID p_item) const {
+	const Item *canvas_item = const_cast<RendererCanvasCull *>(this)->canvas_item_owner.get_or_null(p_item);
+	ERR_FAIL_NULL_V(canvas_item, false);
+
+	return canvas_item->is_player;
+}
+
 // void RendererCanvasCull::canvas_item_set_name(RID p_item, StringName p_name) {
 // 	Item *canvas_item = canvas_item_owner.get_or_null(p_item);
 // 	ERR_FAIL_NULL(canvas_item);
@@ -748,20 +749,21 @@ void RendererCanvasCull::canvas_item_set_base_height(RID p_item, float p_base_he
 	canvas_item->base_height = p_base_height;
 }
 
-bool RendererCanvasCull::texture_height_sort_exists(RID p_texture) const {
-	return height_sort_cache.has(p_texture);
+bool RendererCanvasCull::texture_height_sort_exists(RID p_texture, Rect2i p_atlas_region) const {
+	return height_sort_cache.has(HeightSortKey(p_texture, p_atlas_region));
 }
 
-void RendererCanvasCull::texture_set_height_sort(RID p_texture, int p_frame_count, Vector2i p_frame_size, const PackedByteArray &p_height_data, const TypedArray<Rect2i> &p_tight_rects) {
+void RendererCanvasCull::texture_set_height_sort(RID p_texture, int p_frame_count, Vector2i p_frame_size, const PackedByteArray &p_height_data, const TypedArray<Rect2i> &p_tight_rects, Rect2i p_atlas_region) {
 	ERR_FAIL_COND(p_height_data.size() < p_frame_count * p_frame_size.y);
 	ERR_FAIL_COND(p_tight_rects.size() < p_frame_count);
 
+	HeightSortKey height_sort_key = HeightSortKey(p_texture, p_atlas_region);
 	HeightSort *height_sort = nullptr;
-	if (height_sort_cache.has(p_texture)) {
-		height_sort = height_sort_cache.get(p_texture);
+	if (height_sort_cache.has(height_sort_key)) {
+		height_sort = height_sort_cache.get(height_sort_key);
 	} else {
 		height_sort = memnew(HeightSort);
-		height_sort_cache.insert(p_texture, height_sort);
+		height_sort_cache.insert(height_sort_key, height_sort);
 	}
 
 	height_sort->frame_count = p_frame_count;
@@ -776,12 +778,16 @@ void RendererCanvasCull::texture_set_height_sort(RID p_texture, int p_frame_coun
 	}
 }
 
-void RendererCanvasCull::canvas_item_set_height_sort_contributor(RID p_item, RID p_contributor_item, RID p_texture, Vector2 p_local_offset) {
+void RendererCanvasCull::canvas_item_set_height_sort_contributor(RID p_item, RID p_contributor_item, RID p_texture, Vector2 p_local_offset, Rect2i p_atlas_region) {
 	Item *canvas_item = canvas_item_owner.get_or_null(p_item);
+	Item *contributor_item = canvas_item_owner.get_or_null(p_contributor_item);
+
+	HeightSortKey height_sort_key = HeightSortKey(p_texture, p_atlas_region);
+
 
 	ERR_FAIL_NULL(canvas_item);
 	ERR_FAIL_COND(!canvas_item_owner.owns(p_contributor_item));
-	ERR_FAIL_COND(!height_sort_cache.has(p_texture));
+	ERR_FAIL_COND(!height_sort_cache.has(height_sort_key));
 
 	canvas_item->sort_rect_dirty = true;
 
@@ -799,7 +805,7 @@ void RendererCanvasCull::canvas_item_set_height_sort_contributor(RID p_item, RID
 	}
 
 	contributor->canvas_item_rid = p_contributor_item;
-	contributor->height_sort = height_sort_cache.get(p_texture);
+	contributor->height_sort = height_sort_cache.get(height_sort_key);
 	contributor->local_offset = p_local_offset;
 	contributor->current_frame = 0;
 }
@@ -915,7 +921,13 @@ void RendererCanvasCull::_resolve_item_sort_rect(Item &p_item) {
 		p_item.sort_rect = p_item.height_sort_contributors[0].get_sort_rect();
 		for (uint32_t i = 1; i < p_item.height_sort_contributors.size(); i++) {
 			HeightSortContributor &contributor = p_item.height_sort_contributors[i];
-			p_item.sort_rect = p_item.sort_rect.merge(contributor.get_sort_rect());
+			
+			Rect2 contributor_rect = contributor.get_sort_rect();
+			if (p_item.sort_rect.has_area() && contributor_rect.has_area()) {
+				p_item.sort_rect = p_item.sort_rect.merge(contributor_rect);
+			} else if (contributor_rect.has_area()) {
+				p_item.sort_rect = contributor_rect;
+			}
 		}
 	}
 
@@ -3350,7 +3362,7 @@ RendererCanvasCull::~RendererCanvasCull() {
 	memfree(z_last_list);
 	_canvas_cull_singleton = nullptr;
 
-	for (KeyValue<RID, HeightSort *> &kv : height_sort_cache) {
+	for (KeyValue<HeightSortKey, HeightSort *> &kv : height_sort_cache) {
 		memdelete(kv.value);
 	}
 }
