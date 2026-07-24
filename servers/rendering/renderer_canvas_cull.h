@@ -134,8 +134,11 @@ public:
 		int ysort_parent_abs_z_index; // Absolute Z index of parent. Only populated and used when y-sorting.
 		uint32_t visibility_layer = 0xffffffff;
 		bool is_player = false;
+		int sort_cycle_priority = 0; // higher = prioritize 'sacrificing' this in a cycle
 
-		// StringName name;
+#ifdef DEBUG_ENABLED
+		StringName debug_name;
+#endif
 
 		LocalVector<HeightSortContributor> height_sort_contributors;
 		Rect2 sort_rect;
@@ -328,10 +331,12 @@ public:
 
 	void canvas_item_set_parent(RID p_item, RID p_parent);
 	void canvas_item_set_is_player(RID p_item, bool p_is_player);
-	bool canvas_item_get_is_player(RID p_item) const;
+	void canvas_item_set_sort_cycle_priority(RID p_item, int p_priority);
+	void set_debug_sort_cycle(bool p_enable);
 
-	// void canvas_item_set_name(RID p_item, StringName p_name);
-
+#ifdef DEBUG_ENABLED
+	void canvas_item_set_debug_name(RID p_item, StringName p_name);
+#endif
 	void canvas_item_set_visible(RID p_item, bool p_visible);
 	void canvas_item_set_light_mask(RID p_item, int p_mask);
 
@@ -505,6 +510,7 @@ public:
 	inline static float height_sort_debug_height_b = 0.0f;
 
 private:
+	bool debug_sort_cycle = false;
 	AHashMap<HeightSortKey, HeightSort *, HeightSortKeyHasher> height_sort_cache;
 
 	LocalVector<HeightSortEdge> _sort_edges;
@@ -516,6 +522,7 @@ private:
 	LocalVector<uint8_t> _cycle_state;
 	LocalVector<int> _cycle_dfs_node;
 	LocalVector<int> _cycle_dfs_edge;
+	LocalVector<int> _cycle_members;
 
 	void _resolve_item_sort_rect(Item &p_item);
 	void _resolve_item_sort_rects(Item **p_y_sorted_items, int p_item_count);
@@ -525,7 +532,8 @@ private:
 	void _sort_heap_push(LocalVector<int> &heap, int value);
 	int _sort_heap_pop(LocalVector<int> &heap);
 	void _clear_height_sort_debug(Item **p_y_sorted_items, int p_item_count);
-	int _find_cycle_node(int p_item_count);
+	bool _find_cycle(int p_item_count, LocalVector<int> &r_cycle);
+	int _pick_cycle_break_node(Item **p_y_sorted_items, const LocalVector<int> &p_cycle);
 
 	bool _is_node_in_cycle(int p_node, int p_item_count);
 

@@ -129,6 +129,7 @@ private:
 	bool hide_clip_children = false;
 	bool height_occlusion_enabled = false;
 	float base_height = 0.0f;
+	int sort_cycle_priority = 0;
 
 #ifdef TOOLS_ENABLED
 	mutable HashMap<StringName, StringName> instance_parameter_cache;
@@ -245,8 +246,6 @@ public:
 		NOTIFICATION_WORLD_2D_CHANGED = 36,
 	};
 
-	void set_is_player(bool p_is_player);
-	bool get_is_player() const;
 
 	/* EDITOR AND DEBUGGING */
 
@@ -328,6 +327,11 @@ public:
 
 	void set_base_height(float p_base_height);
 	float get_base_height() const;
+
+	void set_is_player(bool p_is_player);
+
+	void set_sort_cycle_priority(int p_priority);
+	int get_sort_cycle_priority() const;
 
 	/* ORDERING */
 

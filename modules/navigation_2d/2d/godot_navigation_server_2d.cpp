@@ -1285,6 +1285,11 @@ COMMAND_1(free_rid, RID, p_object) {
 			link->set_map(nullptr);
 		}
 
+		if (link->get_other_map() != nullptr) {
+			link->get_other_map()->remove_link(link);
+			link->set_other_map(nullptr);
+		}
+
 		link_owner.free(p_object);
 
 	} else if (agent_owner.owns(p_object)) {

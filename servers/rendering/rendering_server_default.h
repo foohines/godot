@@ -1026,7 +1026,6 @@ public:
 	FUNC2(canvas_item_set_height_occlusion_enabled, RID, bool)
 	FUNC2(canvas_item_set_base_height, RID, float)
 
-	
 	FUNC2RC(bool, texture_height_sort_exists, RID, Rect2i)
 	FUNC6(texture_set_height_sort, RID, int, Vector2i, const PackedByteArray &, const TypedArray<Rect2i> &, Rect2i)
 
@@ -1042,11 +1041,13 @@ public:
 	FUNC2(canvas_item_set_height_sort_debug, RID, bool)
 	FUNC1R(PackedFloat32Array, canvas_item_get_height_sort_debug_data, RID)
 
-	
-
 	FUNC2(canvas_item_set_is_player, RID, bool)
-	FUNC1RC(bool, canvas_item_get_is_player, RID)
-	// FUNC2(canvas_item_set_name, RID, StringName)
+	FUNC2(canvas_item_set_sort_cycle_priority, RID, int)
+	FUNC1(set_debug_sort_cycle, bool)
+
+#ifdef DEBUG_ENABLED
+	FUNC2(canvas_item_set_debug_name, RID, StringName)
+#endif
 
 	FUNC6(canvas_item_add_line, RID, const Point2 &, const Point2 &, const Color &, float, bool)
 	FUNC5(canvas_item_add_polyline, RID, const Vector<Point2> &, const Vector<Color> &, float, bool)

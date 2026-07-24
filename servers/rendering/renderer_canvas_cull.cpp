@@ -513,6 +513,10 @@ bool RendererCanvasCull::was_sdf_used() {
 	return sdf_used;
 }
 
+void RendererCanvasCull::set_debug_sort_cycle(bool p_enabled) {
+	debug_sort_cycle = p_enabled;
+}
+
 RID RendererCanvasCull::canvas_allocate() {
 	return canvas_owner.allocate_rid();
 }
@@ -572,18 +576,19 @@ void RendererCanvasCull::canvas_item_set_is_player(RID p_item, bool p_is_player)
 	canvas_item->is_player = p_is_player;
 }
 
-bool RendererCanvasCull::canvas_item_get_is_player(RID p_item) const {
-	const Item *canvas_item = const_cast<RendererCanvasCull *>(this)->canvas_item_owner.get_or_null(p_item);
-	ERR_FAIL_NULL_V(canvas_item, false);
-
-	return canvas_item->is_player;
+void RendererCanvasCull::canvas_item_set_sort_cycle_priority(RID p_item, int p_priority) {
+	Item *canvas_item = canvas_item_owner.get_or_null(p_item);
+	ERR_FAIL_NULL(canvas_item);
+	canvas_item->sort_cycle_priority = p_priority;
 }
 
-// void RendererCanvasCull::canvas_item_set_name(RID p_item, StringName p_name) {
-// 	Item *canvas_item = canvas_item_owner.get_or_null(p_item);
-// 	ERR_FAIL_NULL(canvas_item);
-// 	canvas_item->name = p_name;
-// }
+#ifdef DEBUG_ENABLED
+void RendererCanvasCull::canvas_item_set_debug_name(RID p_item, StringName p_name) {
+	Item *canvas_item = canvas_item_owner.get_or_null(p_item);
+	ERR_FAIL_NULL(canvas_item);
+	canvas_item->debug_name = p_name;
+}
+#endif
 
 RID RendererCanvasCull::canvas_item_allocate() {
 	return canvas_item_owner.allocate_rid();
@@ -784,7 +789,6 @@ void RendererCanvasCull::canvas_item_set_height_sort_contributor(RID p_item, RID
 
 	HeightSortKey height_sort_key = HeightSortKey(p_texture, p_atlas_region);
 
-
 	ERR_FAIL_NULL(canvas_item);
 	ERR_FAIL_COND(!canvas_item_owner.owns(p_contributor_item));
 	ERR_FAIL_COND(!height_sort_cache.has(height_sort_key));
@@ -921,7 +925,7 @@ void RendererCanvasCull::_resolve_item_sort_rect(Item &p_item) {
 		p_item.sort_rect = p_item.height_sort_contributors[0].get_sort_rect();
 		for (uint32_t i = 1; i < p_item.height_sort_contributors.size(); i++) {
 			HeightSortContributor &contributor = p_item.height_sort_contributors[i];
-			
+
 			Rect2 contributor_rect = contributor.get_sort_rect();
 			if (p_item.sort_rect.has_area() && contributor_rect.has_area()) {
 				p_item.sort_rect = p_item.sort_rect.merge(contributor_rect);
@@ -1011,45 +1015,53 @@ int RendererCanvasCull::_populate_valid_height_sort_indices(Item **p_y_sorted_it
 	return valid_indices_count;
 }
 
-int RendererCanvasCull::_find_cycle_node(int p_item_count) {
-	// state: 0 = unvisited, 1 = on current path, 2 = fully explored
+bool RendererCanvasCull::_find_cycle(int p_item_count, LocalVector<int> &r_cycle) {
 	_cycle_state.resize(p_item_count);
 	memset(_cycle_state.ptr(), 0, p_item_count * sizeof(uint8_t));
-
 	_cycle_dfs_node.clear();
 	_cycle_dfs_edge.clear();
+	r_cycle.clear();
 
 	for (int start = 0; start < p_item_count; start++) {
-		// skip already-processed nodes and already-explored nodes
 		if (_sort_indegree[start] <= 0 || _cycle_state[start] != 0) {
 			continue;
 		}
 
 		_cycle_dfs_node.push_back(start);
 		_cycle_dfs_edge.push_back(_sort_edge_offsets[start]);
-		_cycle_state[start] = 1; // on path
+		_cycle_state[start] = 1;
 
 		while (!_cycle_dfs_node.is_empty()) {
 			int node = _cycle_dfs_node[_cycle_dfs_node.size() - 1];
-			int &edge_cursor = _cycle_dfs_edge[_cycle_dfs_edge.size() - 1];
+			int edge_cursor = _cycle_dfs_edge[_cycle_dfs_edge.size() - 1];
 
 			bool descended = false;
 			while (edge_cursor < _sort_edge_offsets[node + 1]) {
 				int neighbour = _sort_edges[edge_cursor].to;
 				edge_cursor++;
 
-				// ignore edges to already-processed nodes
 				if (_sort_indegree[neighbour] <= 0) {
 					continue;
 				}
 
 				if (_cycle_state[neighbour] == 1) {
-					// neighbour is on current path - found a cycle
-					return neighbour;
+					// Back edge. The cycle is the stack from neighbour to the top.
+					uint32_t cycle_start = 0;
+					for (uint32_t i = 0; i < _cycle_dfs_node.size(); i++) {
+						if (_cycle_dfs_node[i] == neighbour) {
+							cycle_start = i;
+							break;
+						}
+					}
+					for (uint32_t i = cycle_start; i < _cycle_dfs_node.size(); i++) {
+						r_cycle.push_back(_cycle_dfs_node[i]);
+					}
+					return true;
 				}
 
 				if (_cycle_state[neighbour] == 0) {
 					_cycle_state[neighbour] = 1;
+					_cycle_dfs_edge[_cycle_dfs_edge.size() - 1] = edge_cursor;
 					_cycle_dfs_node.push_back(neighbour);
 					_cycle_dfs_edge.push_back(_sort_edge_offsets[neighbour]);
 					descended = true;
@@ -1058,15 +1070,44 @@ int RendererCanvasCull::_find_cycle_node(int p_item_count) {
 			}
 
 			if (!descended) {
-				// done with this node, pop it off the path
 				_cycle_state[node] = 2;
 				_cycle_dfs_node.remove_at(_cycle_dfs_node.size() - 1);
 				_cycle_dfs_edge.remove_at(_cycle_dfs_edge.size() - 1);
 			}
 		}
 	}
+	return false;
+}
 
-	return -1;
+int RendererCanvasCull::_pick_cycle_break_node(Item **p_y_sorted_items, const LocalVector<int> &p_cycle) {
+	int best = p_cycle[0];
+	int best_priority = p_y_sorted_items[best]->sort_cycle_priority;
+	real_t best_area = p_y_sorted_items[best]->sort_rect.size.x * p_y_sorted_items[best]->sort_rect.size.y;
+
+	for (uint32_t i = 1; i < p_cycle.size(); i++) {
+		const int idx = p_cycle[i];
+		const Item *item = p_y_sorted_items[idx];
+		const int priority = item->sort_cycle_priority;
+		const real_t area = item->sort_rect.size.x * item->sort_rect.size.y;
+
+		bool better = false;
+		if (priority > best_priority) {
+			better = true; // higher priority wins outright
+		} else if (priority == best_priority) {
+			if (area < best_area) {
+				better = true; // tie on priority → smaller area
+			} else if (area == best_area && idx < best) {
+				better = true; // tie on both → lowest index (stable)
+			}
+		}
+
+		if (better) {
+			best = idx;
+			best_priority = priority;
+			best_area = area;
+		}
+	}
+	return best;
 }
 
 // TODO: ? Maybe look into "sweep and prune" or grid-based optimizations for item overlap detection
@@ -1086,9 +1127,6 @@ void RendererCanvasCull::_height_sort(Item **p_y_sorted_items, int p_item_count)
 
 	int *valid_indices = (int *)alloca(p_item_count * sizeof(int));
 	int valid_indices_count = _populate_valid_height_sort_indices(p_y_sorted_items, p_item_count, valid_indices);
-	// if (Engine::get_singleton()->get_frames_drawn() % 1500 == 0) {
-	// 	print_line(valid_indices_count);
-	// }
 
 	Rect2 *transformed_rects = (Rect2 *)alloca(valid_indices_count * sizeof(Rect2));
 
@@ -1131,9 +1169,7 @@ void RendererCanvasCull::_height_sort(Item **p_y_sorted_items, int p_item_count)
 
 			// debug
 			if (a->height_sort_debug && b->height_sort_debug) {
-				real_t intersection_x = (MAX(rect_a.position.x, rect_b.position.x) +
-												MIN(rect_a.get_end().x, rect_b.get_end().x)) /
-						2.0f;
+				real_t intersection_x = (MAX(rect_a.position.x, rect_b.position.x) + MIN(rect_a.get_end().x, rect_b.get_end().x)) / 2.0f;
 
 				real_t local_x = intersection_x - a->ysort_xform.columns[2].x;
 				real_t local_y = shared_y_bottom - a->ysort_xform.columns[2].y;
@@ -1177,18 +1213,23 @@ void RendererCanvasCull::_height_sort(Item **p_y_sorted_items, int p_item_count)
 
 	while (_sort_result.size() < (uint32_t)p_item_count) {
 		if (_sort_queue.is_empty()) {
-			// cycle detected
+			ERR_FAIL_COND(!_find_cycle(p_item_count, _cycle_members));
 
-			// for (int i = 0; i < _sort_edges.size(); i++) {
-			// 	HeightSortEdge &edge = _sort_edges[i];
-			// 	print_line(edge.from_name, " -> ", edge.to_name);
+			if (debug_sort_cycle) {
+				print_line(vformat("cycle: [%d]", _cycle_members.size()));
+				for (uint32_t i = 0; i < _cycle_members.size(); i++) {
+					const Item *it = p_y_sorted_items[_cycle_members[i]];
+					print_line(vformat("  [%d] %s", _cycle_members[i], String(it->debug_name)));
+				}
+			}
 
-			// }
+			const int break_node = _pick_cycle_break_node(p_y_sorted_items, _cycle_members);
 
-			int cycle_node = _find_cycle_node(p_item_count);
-			ERR_FAIL_COND(cycle_node == -1); // queue empty but no cycle = logic error
-			_sort_indegree[cycle_node] = 0;
-			_sort_heap_push(_sort_queue, cycle_node);
+			if (debug_sort_cycle) {
+				print_line(vformat("break node: %s", p_y_sorted_items[break_node]->debug_name));
+			}
+			_sort_indegree[break_node] = 0;
+			_sort_heap_push(_sort_queue, break_node);
 			continue;
 		}
 

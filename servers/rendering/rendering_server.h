@@ -835,8 +835,12 @@ public:
 	virtual void canvas_item_set_use_identity_transform(RID p_item, bool p_enabled) = 0;
 	virtual void canvas_item_set_height_occlusion_enabled(RID p_item, bool p_enabled) = 0;
 	virtual void canvas_item_set_base_height(RID p_item, float p_base_height) = 0;
+	virtual void canvas_item_set_sort_cycle_priority(RID p_item, int p_priority) = 0;
+	virtual void set_debug_sort_cycle(bool p_enable) = 0;
 
-	// virtual void canvas_item_set_name(RID p_item, StringName p_name) = 0;
+#ifdef DEBUG_ENABLED
+	virtual void canvas_item_set_debug_name(RID p_item, StringName p_name) = 0;
+#endif
 
 	virtual void canvas_item_add_line(RID p_item, const Point2 &p_from, const Point2 &p_to, const Color &p_color, float p_width = -1.0, bool p_antialiased = false) = 0;
 	virtual void canvas_item_add_polyline(RID p_item, const Vector<Point2> &p_points, const Vector<Color> &p_colors, float p_width = -1.0, bool p_antialiased = false) = 0;
@@ -860,7 +864,6 @@ public:
 	virtual void canvas_item_add_animation_slice(RID p_item, double p_animation_length, double p_slice_begin, double p_slice_end, double p_offset) = 0;
 
 	virtual void canvas_item_set_is_player(RID p_item, bool p_is_player) = 0;
-	virtual bool canvas_item_get_is_player(RID p_item) const = 0;
 
 	virtual void canvas_item_set_sort_children_by_y(RID p_item, bool p_enable) = 0;
 	virtual void canvas_item_set_z_index(RID p_item, int p_z) = 0;

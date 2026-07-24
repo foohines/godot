@@ -3350,9 +3350,12 @@ void RenderingServer::_bind_methods() {
 	/* Primitives */
 
 	ClassDB::bind_method(D_METHOD("canvas_item_set_is_player", "item", "is_player"), &RenderingServer::canvas_item_set_is_player);
-	ClassDB::bind_method(D_METHOD("canvas_item_get_is_player", "item"), &RenderingServer::canvas_item_get_is_player);
+	ClassDB::bind_method(D_METHOD("canvas_item_set_sort_cycle_priority", "item", "priority"), &RenderingServer::canvas_item_set_sort_cycle_priority);
+	ClassDB::bind_method(D_METHOD("set_debug_sort_cycle", "enable"), &RenderingServer::set_debug_sort_cycle);
 
-	// ClassDB::bind_method(D_METHOD("canvas_item_set_name", "item", "name"), &RenderingServer::canvas_item_set_name);
+#ifdef DEBUG_ENABLED
+	ClassDB::bind_method(D_METHOD("canvas_item_set_debug_name", "item", "name"), &RenderingServer::canvas_item_set_debug_name);
+#endif
 
 	ClassDB::bind_method(D_METHOD("canvas_item_add_line", "item", "from", "to", "color", "width", "antialiased"), &RenderingServer::canvas_item_add_line, DEFVAL(-1.0), DEFVAL(false));
 	ClassDB::bind_method(D_METHOD("canvas_item_add_polyline", "item", "points", "colors", "width", "antialiased"), &RenderingServer::canvas_item_add_polyline, DEFVAL(-1.0), DEFVAL(false));

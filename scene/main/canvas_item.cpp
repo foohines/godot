@@ -1084,14 +1084,6 @@ void CanvasItem::draw_primitive(const Vector<Point2> &p_points, const Vector<Col
 	RenderingServer::get_singleton()->canvas_item_add_primitive(canvas_item, p_points, p_colors, p_uvs, rid);
 }
 
-void CanvasItem::set_is_player(bool p_is_player) {
-	RenderingServer::get_singleton()->canvas_item_set_is_player(canvas_item, p_is_player);
-}
-
-bool CanvasItem::get_is_player() const {
-	return RenderingServer::get_singleton()->canvas_item_get_is_player(canvas_item);
-}
-
 void CanvasItem::draw_set_transform(const Point2 &p_offset, real_t p_rot, const Size2 &p_scale) {
 	ERR_THREAD_GUARD;
 	ERR_DRAW_GUARD;
@@ -1625,6 +1617,9 @@ void CanvasItem::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_base_height", "base_height"), &CanvasItem::set_base_height);
 	ClassDB::bind_method(D_METHOD("get_base_height"), &CanvasItem::get_base_height);
 
+	ClassDB::bind_method(D_METHOD("set_sort_cycle_priority", "sort_cycle_priority"), &CanvasItem::set_sort_cycle_priority);
+	ClassDB::bind_method(D_METHOD("get_sort_cycle_priority"), &CanvasItem::get_sort_cycle_priority);
+
 	ClassDB::bind_method(D_METHOD("set_texture_filter", "mode"), &CanvasItem::set_texture_filter);
 	ClassDB::bind_method(D_METHOD("get_texture_filter"), &CanvasItem::get_texture_filter);
 
@@ -1656,6 +1651,7 @@ void CanvasItem::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "y_sort_enabled"), "set_y_sort_enabled", "is_y_sort_enabled");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "height_occlusion_enabled"), "set_height_occlusion_enabled", "is_height_occlusion_enabled");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "base_height"), "set_base_height", "get_base_height");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "sort_cycle_priority"), "set_sort_cycle_priority", "get_sort_cycle_priority");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "height_sort_debug_enabled"), "set_height_sort_debug_enabled", "is_height_sort_debug_enabled");
 
 	ADD_GROUP("Texture", "texture_");
@@ -1825,6 +1821,22 @@ void CanvasItem::set_base_height(float p_base_height) {
 float CanvasItem::get_base_height() const {
 	ERR_READ_THREAD_GUARD_V(0)
 	return base_height;
+}
+
+void CanvasItem::set_is_player(bool p_is_player) {
+	ERR_THREAD_GUARD;
+	RenderingServer::get_singleton()->canvas_item_set_is_player(canvas_item, p_is_player);
+}
+
+void CanvasItem::set_sort_cycle_priority(int p_priority) {
+	ERR_THREAD_GUARD;
+	sort_cycle_priority = p_priority;
+	RenderingServer::get_singleton()->canvas_item_set_sort_cycle_priority(canvas_item, p_priority);
+}
+
+int CanvasItem::get_sort_cycle_priority() const {
+	ERR_READ_THREAD_GUARD_V(0)
+	return sort_cycle_priority;
 }
 
 void CanvasItem::_refresh_texture_filter_cache() const {
